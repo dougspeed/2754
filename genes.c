@@ -496,7 +496,7 @@ if((output2=fopen(filename2, "w"))==NULL)
 {printf("Error opening %s\n\n", filename2);exit(1);}
 fprintf(output2, "Gene_Number Gene_name Phen_Number REML_Her REML_SD LRT_Stat LRT_P Score_Stat Score_P MA_Delta MA_SD REML_BF Gene_Length Gene_Weight\n");
 for(g=0;g<num_genes;g++)
-{fprintf(output2, "%d %s %d %.6f %.6f %.2f %.4e %.2f %.4e %.4f %.4f %.2f %d %.2f %d %d\n", g+1, genenames[g], mpheno, gdetails[g], gdetails[g+num_genes], gdetails[g+2*num_genes], gdetails[g+3*num_genes], gdetails[g+4*num_genes], gdetails[g+5*num_genes], gdetails[g+6*num_genes], gdetails[g+7*num_genes], gdetails[g+8*num_genes], (int)gdetails[g+9*num_genes], gdetails[g+10*num_genes], gstarts[g]+1, gends[g]);}
+{fprintf(output2, "%d %s %d %.6f %.6f %.2f %.4e %.2f %.4e %.4f %.4f %.2f %d %.2f\n", g+1, genenames[g], mpheno, gdetails[g], gdetails[g+num_genes], gdetails[g+2*num_genes], gdetails[g+3*num_genes], gdetails[g+4*num_genes], gdetails[g+5*num_genes], gdetails[g+6*num_genes], gdetails[g+7*num_genes], gdetails[g+8*num_genes], (int)gdetails[g+9*num_genes], gdetails[g+10*num_genes]);}
 fclose(output2);
 
 if(cut1!=-1)	//prepare regions for MultiBLUP

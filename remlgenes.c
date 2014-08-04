@@ -152,12 +152,13 @@ free(Dtemp1);
 free(Dtemp2);
 
 
-//ready for REML - adding on prior alog(w) +(b-1)log(lam) -(a+b)log(w+lam) -log(beta) 
-//first test lambdas .1W, 1W, 10W, 100W, 1000W
+//ready for REML - adding on prior alog(w) +(b-1)log(lam) -(a+b)log(w+lam) -log(beta)
+
+//first test lambdas and start with best fitting one
 best=-9;
-for(k=-2;k<4;k++)
+for(k=-6;k<10;k++)
 {
-lambda=wsum*pow(10,k);
+lambda=wsum*pow(2,k);
 S1=0;for(j=0;j<wnum;j++){if(E[j]+lambda>0){S1+=log(E[j]+lambda);}}
 T1=0;for(j=0;j<wnum;j++){T1+=pow(D[j],2)*pow(E[j]+lambda,-1);}
 gam=YTCY-T1;
@@ -168,7 +169,7 @@ if(best==-9){best=k;maxlike=like;}
 if(like>maxlike){best=k;maxlike=like;}
 }
 
-lambda=wsum*pow(10,best);
+lambda=wsum*pow(2,best);
 her=wsum/(wsum+lambda);
 
 like2=0;stop=0;count=0;
@@ -232,9 +233,11 @@ T3=0;for(j=0;j<wnum;j++){T3+=pow(D[j],2)*E[j];}
 
 d2=.5*nfree*T2/YTCY-.5*S2;
 dd2=.5*nfree/YTCY*(pow(T2,2)/YTCY-2*T3)+.5*S3;
+//think only care if deriv is positive
 statscore=d2/pow(-dd2,.5);
-if(statscore>0){statscore=-statscore;}
-pvascore=2*cdfN(statscore);
+pvascore=cdfN(-statscore);
+//if(statscore>0){statscore=-statscore;}
+//pvascore=2*cdfN(statscore);
 if(dd2>0){pvascore=1.0;}
 	
 //want also sd for log (1/lambda) = log (h/(1-h)/w)

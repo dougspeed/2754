@@ -95,13 +95,13 @@ printf("Help pages at http://dougspeed.com/ldak\n\n");
 //manipulate some file names
 #include "append.c"
 
-//do some checks that files are present
+//do some checks that files are present when provided or required
 #include "checks1.c"
 
 //and some more mode-specific checks
 #include "checks2.c"
 
-//and now check the details files
+//and now check the details files for weights, kinships or genes
 if(mode==2||mode==3||mode==5||mode==6||mode==8||mode==9||mode==10||mode==11||mode==12)
 {
 #include "checks3.c"
@@ -111,7 +111,7 @@ if(mode==2||mode==3||mode==5||mode==6||mode==8||mode==9||mode==10||mode==11||mod
 
 //see if changing famfile (only allowed if not reading data)
 
-if((mode==16&&num_regs==0&&num_kins>0)||mode==17)	//get from kinstems[0]
+if((mode==16&&num_regs==0&&num_kins>0)||mode==17||mode==18)	//get from kinstems[0]
 {printf("Will set ids based on %s.grm.id\n", kinstems[0]);
 sprintf(famfile,"%s.grm.id", kinstems[0]);}
 
@@ -119,7 +119,7 @@ if(mode==16&&num_kins==0&&num_regs==0)	//get from respfile
 {printf("Will set ids based on %s\n", respfile);
 sprintf(famfile,"%s", respfile);}
 
-//sort which samples and predictors we are using - also deals with re-calc weights and sub regions
+//sort which samples and predictors we are using - also deals with re-calc weights and subtracting regions
 #include "getnums.c"
 
 if(num_samples!=-1)
@@ -198,7 +198,7 @@ data_length=get_partition_boundaries(folder, partition, keeppreds_use, keeppreds
 
 //if(mode==16)	//generalized reml - default fine
 //if(mode==17)	//decompose kinship(s) - default fine
-if(mode==19||mode==20)	//calc blups or scores, work out which we use
+if(mode==19||mode==20)	//calc blups or scores, get predictor effects and work out which predictors we use
 {
 chr=malloc(sizeof(int)*num_preds_use);
 prednames=malloc(sizeof(char*)*num_preds_use);
@@ -243,8 +243,7 @@ if(mode==22)	//make snps ???
 //if(mode==23)	//add kins - default fine
 //if(mode==24)	//subtract kins - default fine
 
-if(mode==25||mode==26||mode==27)	//converting data types
-{data_length=num_preds_use;}
+//if(mode==25||mode==26||mode==27)	//converting data types - default fine
 
 ///////////////////////////
 ///////////////////////////
@@ -630,14 +629,20 @@ if((output3=fopen(filename3,"w"))==NULL)
 fprintf(output3, "Gene_Number Gene_Name Phen_Number REML_HerB REML_SDB LRT_StatB LRT_P Score_StatB Score_PB MA_DeltaB MA_SDB REML_BFB Gene_Length Gene_Weight\n");
 }
 
-current=0;prev1=0;prev2=0;
+total=0;
+for(g=0;g<num_genes;g++)
+{
+if(gpartitions[g]==partition){total++;}
+}
+current=0;prev1=0;prev2=0;count2=0;
 for(g=0;g<num_genes;g++)
 {
 if(gpartitions[g]==partition)
 {
-if((g+1)%10==0)
+count2++;
+if((g+1)%100==0)
 {
-printf("Testing Gene %d (of in total %d)\n", g+1, num_genes);
+printf("Testing Gene %d out of %d in Partition %d\n", count2, total, partition);
 if(mode==9)
 {
 fclose(output);
@@ -692,7 +697,7 @@ else	//general case
 }
 
 //print them
-fprintf(output, "%d %s %d %.6f %.6f %.2f %.4e %.2f %.4e %.4f %.4f %.2f %d %.2f\n", g+1, genenames[g], mpheno, remla[2], remla[3], remla[4], remla[5], remla[6], remla[7], remla[8], remla[9], remla[10], (int)remla[0], remla[1]);
+fprintf(output, "%d %s %d %.6f %.6f %.2f %.4e %.2f %.4e %.4f %.4f %.2f %d %.2f\n", g+1, genenames[g], keepresps[0]+1, remla[2], remla[3], remla[4], remla[5], remla[6], remla[7], remla[8], remla[9], remla[10], (int)remla[0], remla[1]);
 }	//end of mode=9
 
 if(mode==11)	//calc gene-based bivariate

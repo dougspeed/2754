@@ -113,8 +113,8 @@ int scoretest=0;
 
 //program variables
 
-int i, i2, j, j2, k, g, m, r;
-int count, found, found2, found3, current, prev1, prev2, length, lwork, info, one=1;
+int i, i2, j, j2, k, g, m, r, count, count2;
+int found, found2, found3, current, prev1, prev2, length, lwork, info, one=1, total;
 int readint, *order, gen, value, conv[4], shortcut=0;
 double alpha, beta, wkopt, *work;
 

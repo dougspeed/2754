@@ -504,7 +504,13 @@ if(strcmp(argname,"--sig2")==0)
 if(cut2<0){printf("%s should be followed by float within [0,1) (not %s)\n\n", argname, argv[count+1]);exit(1);}
 }
 
-
+if(strcmp(argname,"--score-test")==0)
+{
+scoretest=-1;found=1;
+if(strcmp(argv[count+1],"YES")==0){scoretest=1;}
+if(strcmp(argv[count+1],"NO")==0){scoretest=0;}
+if(scoretest==-1){printf("%s should be followed by YES or NO (not %s)\n\n", argname, argv[count+1]);exit(1);}
+}
 
 
 

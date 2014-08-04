@@ -138,7 +138,7 @@ fclose(input);
 
 if(mode==6)	//joining kins
 {
-sprintf(filename, "%s/partition_details.txt", folder);
+sprintf(filename, "%spartition_details.txt", folder);
 if((input=fopen(filename,"r"))==NULL)
 {printf("Error, %s does not exist - correct this first\n\n",filename);exit(1);}
 
@@ -147,7 +147,7 @@ kinstems=malloc(sizeof(char *)*num_kins);
 
 for(k=0;k<num_kins;k++)
 {kinstems[k]=malloc(sizeof(char)*500);
-sprintf(kinstems[k], "%s/kinship%d", folder, k+1);}
+sprintf(kinstems[k], "%skinship%d", folder, k+1);}
 sprintf(outfile, "%s/kinshipALL", folder);
 }
 
@@ -350,31 +350,43 @@ if((input=fopen(respfile,"r"))==NULL)
 {printf("Error, %s does not exist - correct this first\n\n", respfile);exit(1);}
 fclose(input);
 
+if(mode==9||mode==11||mode==16||mode==17||mode==18)
+{
 num_resps=countcols(respfile)-2;
-num_resps_use=1;
-if(mode==11){num_resps_use=2;}
-keepresps[0]=1;if(mpheno!=-1){keepresps[0]=mpheno-1;}
-keepresps[1]=2;if(mpheno2!=-1){keepresps[1]=mpheno2-1;}
 
-if(num_resps<num_resps_use){printf("Error, %s should contain at least %d columns (not %d)\n\n", respfile, num_resps_use+2, num_resps+2);exit(1);}
-
-if(mpheno2!=-1&&mode!=11&&mode!=12)
+if(mpheno2!=-1&&mode!=11&&mode!=18)
 {printf("Error, can only use \"--mpheno2\" when performing bivariate analysis\n\n");exit(1);}
 
-if(mpheno==mpheno2&&mpheno!=-1)
+if(mode==11||mode==18)
+{
+if((mpheno!=-1&&mpheno2==-1)||(mpheno==-1||mpheno2!=-1))
+{printf("Error, must supply both \"--mpheno\" and \"--mpheno2\"\n\n");exit(1);}
+}
+
+if(mpheno!=-1&&mpheno==mpheno2)
 {printf("Error, can not provide the same value (%d) for \"--mpheno\" and \"--mpheno2\"\n\n", mpheno);exit(1);}
 
-if(mpheno>num_resps)
-{printf("Error, provided value %d for \"--mpheno\" but %s contains only %d phenotypes\n\n", mpheno, respfile, num_resps);exit(1);}
+if(mpheno!=-1&&mpheno>num_resps)
+{printf("Error, value %d provided for \"--mpheno\" but %s contains only %d phenotypes\n\n", mpheno, respfile, num_resps);exit(1);}
 
-if(mpheno2>num_resps)
-{printf("Error, provided value %d for \"--mpheno2\" but %s contains only %d phenotypes\n\n", mpheno2, respfile, num_resps);exit(1);}
+if(mpheno!=-1&&mpheno2>num_resps)
+{printf("Error, value %d provided for \"--mpheno2\" but %s contains only %d phenotypes\n\n", mpheno2, respfile, num_resps);exit(1);}
 
 if((mode==9||mode==16||mode==17)&&num_resps>1&&mpheno==-1)
 {printf("Error, %s contains multiple phenotypes, so you must specify one using \"--mpheno\"\n\n", respfile);exit(1);}
 
-if(mode==12&&num_resps>2&&(mpheno==-1||mpheno2==-1))
+if((mode==11||mode==18)&&num_resps>2&&mpheno==-1)
 {printf("Error, %s contains more than 2 phenotypes, so you must specify two using \"--mpheno\" and \"--mpheno2\"\n\n", respfile);exit(1);}
+
+if(mpheno==-1&&num_resps==1){mpheno=1;}
+if(mpheno==-1&&num_resps==2){mpheno=1;mpheno=2;}
+
+num_resps_use=1;
+if(mode==11){num_resps_use=2;}
+keepresps[0]=mpheno-1;keepresps[1]=mpheno2-1;
+
+if(num_resps<num_resps_use){printf("Error, %s should contain at least %d columns (not %d)\n\n", respfile, num_resps_use+2, num_resps+2);exit(1);}
+}
 }
 
 //??? and something here about storing only small pvalues

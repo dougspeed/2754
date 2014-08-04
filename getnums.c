@@ -109,7 +109,7 @@ for(i=0;i<num_samples;i++){free(allsamps[i]);}free(allsamps);
 for(i=0;i<count;i++){free(usesamps[i]);}free(usesamps);
 }
 
-//if subtracting regions, make sure individuals match first kinship file ids
+//if subtracting regions, set keepsamps so individuals match first kinship file ids
 if(mode==24&&num_regs>0)
 {
 allsamps=malloc(sizeof(char*)*num_samples);
