@@ -519,6 +519,7 @@ if(readint>num_preds){num_preds=readint;}
 }
 fclose(input2);
 }
+printf("now %d\n", num_preds);
 
 //now fill names of predictors used
 allsnps=malloc(sizeof(char*)*num_preds);

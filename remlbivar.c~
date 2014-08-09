@@ -69,7 +69,7 @@ double alpha, beta, wkopt, *work;
 int wnum;
 double wsum, ea, eb, la, lb, ro, ronew;
 double adds[5], diff, like, likenull, statlrt, pvalrt, statscore, pvascore;
-double hera, herb, heranew, herbnew, sda=-1, sdb=-1;
+double hera, herb, heranew, herbnew, sda=-1, sdb=-1, dd2;
 
 double *Xa, *Xb, *XTYa, *XTYb, *XTZa, *XTZb, *XTCXa, *XTCXb, *XTCXtemp;
 double *Da, *Db, *Dtemp, *D, *T, detT, *T2, *T3, *TD;

@@ -1,0 +1,1 @@
+gcc satoct/newldak/ldak.c -lm -lblas -llapack -lgsl -lm -lglpk -o ldak2.out -lgslcblas -g

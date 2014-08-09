@@ -17,13 +17,13 @@ if(strcmp(chiamofile,"blank")!=0||strcmp(spfile,"blank")!=0)
 //set filenames for data and open
 if(mode==25)	//sp
 {
-sprintf(filename,"%s_out.sp", outfile);
+sprintf(filename,"%s.sp", outfile);
 if((output=fopen(filename,"w"))==NULL)
 {printf("Error writing to %s\n\n",filename);exit(1);}
 }
 if(mode==26)	//bed
 {
-sprintf(filename,"%s_out.bed", outfile);
+sprintf(filename,"%s.bed", outfile);
 if((output=fopen(filename,"wb"))==NULL)
 {printf("Error writing to %s\n\n",filename);exit(1);}
 gen=108;fwrite(&gen, sizeof(unsigned char), 1, output);
@@ -32,7 +32,7 @@ gen=1;fwrite(&gen, sizeof(unsigned char), 1, output);
 }
 if(mode==27)	//speed
 {
-sprintf(filename,"%s_out.speed", outfile);
+sprintf(filename,"%s.speed", outfile);
 if((output=fopen(filename,"wb"))==NULL)
 {printf("Error writing to %s\n\n",filename);exit(1);}
 }
@@ -90,7 +90,7 @@ if(strcmp(chiamofile,"blank")!=0||strcmp(spfile,"blank")!=0){fclose(datainput);}
 free(data);
 
 //write bimfile
-sprintf(filename2,"%s_out.bim", outfile);
+sprintf(filename2,"%s.bim", outfile);
 if((output2=fopen(filename2,"w"))==NULL)
 {printf("Error writing to %s\n\n",filename2);exit(1);}
 for(j=0;j<data_length;j++)
@@ -98,7 +98,7 @@ for(j=0;j<data_length;j++)
 fclose(output2);
 
 //write famfile
-sprintf(filename3,"%s_out.fam", outfile);
+sprintf(filename3,"%s.fam", outfile);
 if((output3=fopen(filename3,"w"))==NULL)
 {printf("Error writing to %s\n\n",filename3);exit(1);}
 for(i=0;i<num_samples_use;i++)

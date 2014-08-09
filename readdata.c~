@@ -295,7 +295,6 @@ if(retain[j]==1){regindex[r][1+count2]=regindex[r][1+j];count2++;}
 }
 regindex[r][0]=count2;
 count+=count2;
-free(retain);
 }	//end of r loop
 
 if(prune<=1){printf("Number of region predictors reduced from %d to %d\n\n", count3, count);}

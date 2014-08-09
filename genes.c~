@@ -554,6 +554,8 @@ fclose(output3);
 }	//end of gene g sig
 }	//end of g loop
 
+fclose(output5);fclose(output6);
+
 printf("For MultiBLUP, found %d regions spanning %d predictors (sig thresholds %f and %f)\n", count, count2, cut1, cut2);
 sprintf(filename4, "%sregion_number", folder);
 if((output4=fopen(filename4, "w"))==NULL)

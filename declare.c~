@@ -115,7 +115,7 @@ float prune=0.995;
 
 int i, i2, j, j2, k, g, m, r, count, count2;
 int found, found2, found3, current, prev1, prev2, length, lwork, info, one=1, total;
-int readint, *order, shortcut=0, gen, gen2;
+int readint, *order, shortcut=0;
 float value;
 double alpha, beta, wkopt, *work;
 

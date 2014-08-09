@@ -494,7 +494,6 @@ else	//it is not NA
 //load up resp
 for(m=0;m<num_resps_use;m++){respb[i+m*count]=resptemp[keepresps[m]];}
 }	//end of i loop
-fclose(input);
 
 //see which of the ids we can find responses for
 keepindex=malloc(sizeof(int)*num_samples_use);
@@ -620,7 +619,7 @@ else	//it is not NA
 }
 }
 }	//end of i loop
-fclose(input);
+
 
 //see which of the ids we can find covariates for
 keepindex=malloc(sizeof(int)*num_samples_use);
