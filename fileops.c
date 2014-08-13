@@ -260,9 +260,8 @@ return(0);
 
 /////////
 
-int read_mapfile(char *mapfile, int *chr, char **prednames, double *bp, char *al1, char *al2, int data_length, int *keeppreds_use, int type)
+int read_mapfile(char *mapfile, int *chr, char **prednames, double *bp, char *al1, char *al2, int data_length, int *keeppreds_use)
 {
-//type 0, map; type 1, bim; type 2, map quiet; type 3, bim quiet
 int j, count, misscount, misscount2;
 char readchar, readchr[100], readbp[100], readstring[100];
 
@@ -291,25 +290,20 @@ if((input=fopen(mapfile,"r"))==NULL)
 misscount=0;misscount2=0;
 for(j=0;j<count;j++)
 {
-if(fscanf(input, "%s %s %s ", readchr, prednamesb[j], readstring)!=3)
-{printf("Error reading first three elements of Row %d of %s\n\n", j+1, mapfile);exit(1);}
+if(fscanf(input, "%s %s %s %s%c", readchr, prednamesb[j], readstring, readbp, &readchar)!=5)
+{printf("Error reading first four elements of Row %d of %s\n\n", j+1, mapfile);exit(1);}
 
-if(type==0||type==2)	//read bp
+if(al1!=NULL)	//read A1 and A2
 {
-if(fscanf(input, "%s%c", readbp, &readchar)!=2)
-{printf("Error reading basepair of Row %d of %s\n\n", j+1, mapfile);exit(1);}
-}
-
-if(type==1||type==3)	//read bp and A1, A2
-{
-if(fscanf(input, "%s %c %c%c", readbp, al1b+j, al2b+j, &readchar)!=4)
-{printf("Error reading basepair and alleles of Row %d of %s\n\n", j+1, mapfile);exit(1);}
+if(fscanf(input, "%c %c%c", al1b+j, al2b+j, &readchar)!=3)
+{printf("Error reading alleles of Row %d of %s\n\n", j+1, mapfile);exit(1);}
 }
 
 while(readchar!=10&&j+1!=count)	//skip to end of line
 {(void)fscanf(input, "%c", &readchar);}
 
-//save chr
+if(chr!=NULL)	//check and save chr
+{
 chrb[j]=-1;
 if(strcmp(readchr,"X")==0){chrb[j]=23;}
 if(strcmp(readchr,"Y")==0){chrb[j]=24;}
@@ -322,7 +316,7 @@ if(chrb[j]==-1)	//not found so far
 chrb[j]=atoi(readchr);
 if(chrb[j]==0)	//so was not found
 {printf("Error reading %s; chromosome provided (%s) on Row %d is not recognised.\nValue must either be positive integer, or X (23), Y (24), XY (25), MT (26) or 0\n\n", mapfile, readchr, j+1);exit(1);}
-if(chrb[j]>26&&type<2)	//so unexpectedly large
+if(chrb[j]>26)	//so unexpectedly large
 {
 if(misscount<5){printf("Warning reading %s; chromosome provided (%s) on Row %d is greater than 26, the largest expected for humans\n", mapfile, readchr, j+1);}
 misscount++;
@@ -335,17 +329,20 @@ if(j>0)
 if(chrb[j]<chrb[j-1])
 {printf("Error reading %s, chromosome provided (%s) on Row %d is less than that for previous row (%d)\n", mapfile, readchr, j+1, chrb[j-1]);exit(1);}
 }
+}
 
-//save bp and check it's consistent with previous one
+if(bp!=NULL)	//save bp and check it's consistent with previous one
+{
 bpb[j]=atof(readbp);
 
 if(j>0)
 {
 if(chrb[j]==chrb[j-1]&&bpb[j]<bpb[j-1])
 {printf("Error reading %s; basepair provided (%s) on Row %d is less than that for previous row (%f)\n", mapfile, readbp, j+1, bpb[j-1]);exit(1);}
-if(chrb[j]==chrb[j-1]&&bpb[j]==bpb[j-1]&&type<2)
+if(chrb[j]==chrb[j-1]&&bpb[j]==bpb[j-1])
 {printf("Warning reading %s; basepair provided (%s) on Row %d is the same as that for previous row\n", mapfile, readbp, j+1);
 misscount2++;}
+}
 }
 }	//end of j loop
 
@@ -354,11 +351,12 @@ fclose(input);
 if(misscount>=5){printf("In total %d predictors had chromosome values greater than 26\n", misscount);}
 if(misscount>0||misscount2>0){printf("\n");}
 
-
 for(j=0;j<data_length;j++)
 {
-chr[j]=chrb[keeppreds_use[j]];strcpy(prednames[j],prednamesb[keeppreds_use[j]]);bp[j]=bpb[keeppreds_use[j]];
-if(type!=0){al1[j]=al1b[keeppreds_use[j]];al2[j]=al2b[keeppreds_use[j]];}
+if(chr!=NULL){chr[j]=chrb[keeppreds_use[j]];}
+if(prednames!=NULL){strcpy(prednames[j],prednamesb[keeppreds_use[j]]);}
+if(bp!=NULL){bp[j]=bpb[keeppreds_use[j]];}
+if(al1!=NULL){al1[j]=al1b[keeppreds_use[j]];al2[j]=al2b[keeppreds_use[j]];}
 }
 
 free(chrb);free(bpb);free(al1b);free(al2b);
@@ -373,7 +371,7 @@ int read_weightfile(char *weightsfile, float *weights, int data_length, int *kee
 {
 int j, count, count2;
 
-char readchar, readstring[100];
+char readchar;
 
 char **allsnps, **prednamesb;
 float *weightsb;
@@ -406,10 +404,8 @@ for(j=0;j<count;j++){free(allsnps[j]);free(prednamesb[j]);};free(prednamesb);fre
 }
 
 weightsb=malloc(sizeof(float)*count);
-
 if((input=fopen(weightsfile,"r"))==NULL)
 {printf("Error opening %s\n",weightsfile);exit(1);}
-
 for(j=0;j<count;j++)
 {
 if(fscanf(input, "%f%c", weightsb+j, &readchar)!=2)
@@ -417,15 +413,9 @@ if(fscanf(input, "%f%c", weightsb+j, &readchar)!=2)
 if(weightsb[j]<0&&weightsb[j]!=-1)
 {printf("Error, invalid weight (%f) on Row %d of %s (weights should be non-negative)\n\n", weightsb[j], j+1, weightsfile);exit(1);}
 
-if(count2==5)	//read four more elements
-{
-if(fscanf(input, "%s %s %s %s%c", readstring, readstring, readstring, readstring, &readchar)!=5)
-{printf("Error reading last 4 elements of Row %d of %s\n\n", j+1, weightsfile);exit(1);}
-}
 while(readchar!=10){(void)fscanf(input, "%c", &readchar);}
 }
 fclose(input);
-
 
 //fill up weights and check none are -1
 for(j=0;j<data_length;j++)

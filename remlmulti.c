@@ -50,21 +50,19 @@ return(det);
 
 ///////////////////////////
 
-int multi_reml(double *reml, double *resp, int *kindex, int num_samples_use, double *covar, int num_covars, int num_kins, double **mkins, int shortcut, double *U, double *E, int num_regs, int **regindex, double *rdata, int rlength, double *rcentres, double *rmults, float *rweights, char **rprednames, char *ral1, char *ral2, double *gdata, double *gmults, float *gweights, int glength, char **gprednames, float adjust, char *outfile, char **ids1, char **ids2)
+int multi_reml(double *Y, double *Z, double *X, int ns, int num_covars, int num_regs, int g, int *Xstarts, int *Xends, int *Xrec, int *Xrev, double *Xsums, int num_kins, double **mkins, int shortcut, double *U, double *E, double *reml, char *outfile, char **ids1, char **ids2, int rlength, double *rcentres, double *rmults, float *rweights, char **rprednames, char *ral1, char *ral2, double *gmults, float *gweights, char **gprednames, float adjust, float adjust2, double likenull, double *Mnull)
 {
-int i, i2, j, j2, k, k2, r, count;
-int ns, nfree, maxlength, one=1, nlost, token;
+//g=-1 is reml, g=0 is null, else g>0 for genes
+int i, i2, j, k, k2, r, count;
+int nfree, one=1, nlost, token;
 double alpha, beta, sum, value;
 
 int gflag, wnum, *herfixes;
-double regsum;
-double gam, gam2a, gam2b, gam3, like, like2, like3, *AI, *AI2, *AI3, *AIsave, *BI;
-double *lambdas, *lamdiffs, *deltas, *hers;
+double gam, gam2a, gam2b, gam3, like, like2, like3, d2, dd2;
+double *AI, *AI2, *AI3, *AIsave, *BI, *J, *G;
+double *lambdas, *lamdiffs, *deltas, *hers, statlrt, pvalrt, statscore, pvascore;
 
-int *Xstarts, *Xends, *Xrec, *Xrev;
-double *X, *Xsums;
-
-double *Y, *Z, detV, *ZTVZ, *ZTVZ2, *ZTVZ3, detZTVZ, *PY, *PPY, **KPY, **PKPY, *traces;
+double detV, *ZTVZ, *ZTVZ2, *ZTVZ3, detZTVZ, *PY, *PPY, **KPY, **PKPY, *traces;
 double *ZTVY, *Yadj, *VYadj, *thetas, **mGtemp, **mG, **mG2, *effects, **effectsfull;
 double *kintemp, *kintemp2, *UTG, *UTG2, *XTX, *XTX2, *XTX3, *XTG;
 double *V, *V2, *V3, *VZ, *VZZTVZ, *P, *PX, *XTPY;
@@ -72,94 +70,43 @@ double *UTX, *DUTX, *XTVX, *XTVX2, *XTVX3, detXTVX, *DUTXXTVX;
 double *UTY, *UTZ, *D, detD, detC, *F, *FUTZ, *FUTZZTVZ, *H, *HUTY, *HHUTY, *UTKPY, *HUTKPY;	//???
 double *UTYadj, *FUTYadj, *XTVYadj;
 
-FILE *output1, *output2, *output3, *output4;
+FILE *output1, *output2, *output3, *output4, *output5;
 char filename1[500], filename2[500], filename3[500], filename4[500];
 
-//do some checks for whether gene has length zero and return
 
+//set gflag and save gene X
+gflag=0;if(g>0){gflag=1;}
+if(gflag==1)	//fill reml assuming gene does not contribute, check gene length and save predictors
+{
+reml[0]=0;reml[1]=0;reml[2]=likenull;reml[3]=0;reml[4]=1;reml[5]=0;reml[6]=1;
+reml[7]=log(1.0/99999);reml[8]=0;reml[9]=-10;
+if(Xstarts[num_regs]==Xends[num_regs]){return(0);}
 
-ns=kindex[0];
+token=Xends[num_regs]-Xstarts[num_regs];
+G=malloc(sizeof(double)*ns*token);
+for(i=0;i<ns*token;i++){G[i]=X[Xstarts[num_regs]*ns+i];}
+}
+
 nfree=ns-num_covars;
+wnum=0;if(num_regs+gflag>0){wnum=Xends[num_regs+gflag-1];}
 
-//sort Y and Z
-Y=malloc(sizeof(double)*ns);
-Z=malloc(sizeof(double)*ns*num_covars);
-for(i=0;i<ns;i++)
+if(num_regs+gflag>0)	//sort things related to X
 {
-Y[i]=resp[kindex[1+i]];
-for(j=0;j<num_covars;j++){Z[i+j*ns]=covar[kindex[1+i]+j*num_samples_use];}
-}
-
-//get maxlength
-maxlength=0;for(r=0;r<num_regs;r++){maxlength+=regindex[r][0];}
-
-//set gflag
-gflag=0;if(glength>0){gflag=1;}
-
-/////////
-
-if(num_regs+gflag>0)	//load up X, Xstarts, Xsums, Xrecs and ...
-{
-X=malloc(sizeof(double)*ns*(maxlength+glength));
-Xsums=malloc(sizeof(double)*(num_regs+gflag));
-Xstarts=malloc(sizeof(int)*(num_regs+gflag));
-Xends=malloc(sizeof(int)*(num_regs+gflag));
-Xrec=malloc(sizeof(int)*(maxlength+glength));
-Xrev=malloc(sizeof(int)*(maxlength+glength));
-
-wnum=0;regsum=0;
-for(r=0;r<num_regs;r++)
-{
-Xstarts[r]=wnum;Xsums[r]=0;
-for(j=0;j<regindex[r][0];j++)
-{
-j2=regindex[r][1+j];
-if(rmults[j2]!=-1&&rweights[j2]>0)
-{
-for(i=0;i<ns;i++){X[i+wnum*ns]=rdata[kindex[1+i]+j2*ns];}
-Xrec[wnum]=r;
-Xrev[wnum]=j2;
-Xsums[r]+=rweights[j2];
-wnum++;
-}}
-Xends[r]=wnum;
-regsum+=Xsums[r];
-}
-if(gflag==1)
-{
-Xstarts[num_regs]=wnum;Xsums[num_regs]=0;
-for(j=0;j<glength;j++)
-{
-if(gmults[j]!=-1&&gweights[j]>0)
-{
-for(i=0;i<ns;i++){X[i+wnum*ns]=gdata[kindex[1+i]+j*ns];}
-Xrec[wnum]=num_regs;
-Xrev[wnum]=j;
-Xsums[num_regs]+=gweights[j];
-wnum++;
-}}
-Xends[num_regs]=wnum;
-regsum+=Xsums[num_regs];
-}
-
-if(adjust>0&&regsum>=adjust)
-{printf("Error, the total weight for kinship 1 (%.2f) should be larger than the sum of total weights for each regions (%.2f)\n", adjust, regsum);exit(1);}
+if(adjust>0&&adjust2>=adjust)
+{printf("Error, the total weight for kinship 1 (%.2f) should be larger than the sum of total weights for each regions (%.2f)\n", adjust, adjust2);exit(1);}
 
 if(shortcut==1)	//allocate and set things associated with X
 {
-UTX=malloc(sizeof(double)*ns*(maxlength+glength));
-DUTX=malloc(sizeof(double)*ns*(maxlength+glength));
-XTVX=malloc(sizeof(double)*(maxlength+glength)*(maxlength+glength));
-XTVX2=malloc(sizeof(double)*(maxlength+glength));
-XTVX3=malloc(sizeof(double)*(maxlength+glength)*(maxlength+glength));
-DUTXXTVX=malloc(sizeof(double)*ns*(maxlength+glength));
+UTX=malloc(sizeof(double)*ns*wnum);
+DUTX=malloc(sizeof(double)*ns*wnum);
+XTVX=malloc(sizeof(double)*wnum*wnum);
+XTVX2=malloc(sizeof(double)*wnum);
+XTVX3=malloc(sizeof(double)*wnum*wnum);
+DUTXXTVX=malloc(sizeof(double)*ns*wnum);
 
 if(num_kins==0)
 {
-for(i=0;i<ns;i++)
-{
-for(j=0;j<wnum;j++){UTX[i+j*ns]=X[i+j*ns];}
-}
+for(i=0;i<ns*wnum;i++){UTX[i]=X[i];}
 }
 else
 {
@@ -167,7 +114,6 @@ alpha=1.0;beta=0.0;
 dgemm_("T", "N", &ns, &wnum, &ns, &alpha, U, &ns, X, &ns, &beta, UTX, &ns);
 }
 }
-
 }	//end of sorting X
 
 ////////
@@ -181,8 +127,8 @@ PPY=malloc(sizeof(double)*ns);
 KPY=malloc(sizeof(double*)*(num_kins+num_regs+gflag));
 PKPY=malloc(sizeof(double*)*(num_kins+num_regs+gflag));
 for(k=0;k<num_kins+num_regs+gflag;k++)
-{KPY[k]=malloc(sizeof(double)*num_samples_use);
-PKPY[k]=malloc(sizeof(double)*num_samples_use);}
+{KPY[k]=malloc(sizeof(double)*ns);
+PKPY[k]=malloc(sizeof(double)*ns);}
 
 traces=malloc(sizeof(double)*(num_kins+num_regs+gflag));
 AI=malloc(sizeof(double)*(num_kins+num_regs+gflag)*(num_kins+num_regs+gflag));
@@ -190,10 +136,11 @@ AI2=malloc(sizeof(double)*(num_kins+num_regs+gflag));
 AI3=malloc(sizeof(double)*(num_kins+num_regs+gflag)*(num_kins+num_regs+gflag));
 AIsave=malloc(sizeof(double)*(num_kins+num_regs+gflag)*(num_kins+num_regs+gflag));
 BI=malloc(sizeof(double)*(num_kins+num_regs+gflag));
+J=malloc(sizeof(double)*(num_kins+num_regs+gflag)*(num_kins+num_regs+gflag));
 
 ZTVY=malloc(sizeof(double)*num_covars);
-Yadj=malloc(sizeof(double)*num_samples_use);
-VYadj=malloc(sizeof(double)*num_samples_use);
+Yadj=malloc(sizeof(double)*ns);
+VYadj=malloc(sizeof(double)*ns);
 thetas=malloc(sizeof(double)*num_covars);
 
 if(num_kins+num_regs+gflag>0)
@@ -203,9 +150,9 @@ mGtemp=malloc(sizeof(double*)*(num_kins+num_regs+gflag));
 mG2=malloc(sizeof(double*)*(num_kins+num_regs+gflag));
 for(k=0;k<num_kins+num_regs+gflag;k++)
 {
-mG[k]=malloc(sizeof(double)*num_samples_use);
-mGtemp[k]=malloc(sizeof(double)*num_samples_use);
-mG2[k]=malloc(sizeof(double)*num_samples_use);	//might not use all of these
+mG[k]=malloc(sizeof(double)*ns);
+mGtemp[k]=malloc(sizeof(double)*ns);
+mG2[k]=malloc(sizeof(double)*ns);	//might not use all of these
 }
 }
 
@@ -251,8 +198,8 @@ HHUTY=malloc(sizeof(double)*ns);
 UTKPY=malloc(sizeof(double)*ns);
 HUTKPY=malloc(sizeof(double)*ns);
 
-UTYadj=malloc(sizeof(double)*num_samples_use);
-FUTYadj=malloc(sizeof(double)*num_samples_use);
+UTYadj=malloc(sizeof(double)*ns);
+FUTYadj=malloc(sizeof(double)*ns);
 }
 
 ///////////////////////////
@@ -276,455 +223,45 @@ for(k=0;k<num_kins+num_regs+gflag;k++)
 {
 lambdas[k]=hers[k]/(1-sum);
 if(adjust==0){deltas[k]=lambdas[k];}
-if(adjust>0&&k==0){deltas[0]=adjust/(adjust-regsum)*lambdas[0];}
-if(adjust>0&&k>0){deltas[k]=lambdas[k]-Xsums[k-1]/(adjust-regsum)*lambdas[0];}
+if(adjust>0&&k==0){deltas[0]=adjust/(adjust-adjust2)*lambdas[0];}
+if(adjust>0&&k>0){deltas[k]=lambdas[k]-Xsums[k-1]/(adjust-adjust2)*lambdas[0];}
 }
 
 ///////////////////////////
 
-if(gflag==0)	//will be screen and file printing progress
-{
-printf("Iter\t");
-for(k=0;k<num_kins;k++){printf("Her_K%d\t", k+1);}
-for(r=0;r<num_regs;r++){printf("Her_R%d\t", r+1);}
-printf("Likelihood\tDifference\tTarget\tNo_Set_to_Zero\n");
-
-sprintf(filename1,"%s.progress", outfile);
-if((output1=fopen(filename1,"w"))==NULL)
-{printf("Error opening %s\n\n", filename1);exit(1);}
-fprintf(output1, "Iter\t");
-for(k=0;k<num_kins;k++){fprintf(output1, "Her_K%d\t", k+1);}
-for(r=0;r<num_regs;r++){fprintf(output1, "Her_R%d\t", r+1);}
-fprintf(output1, "Likelihood\tDifference\tTarget\tNo_Set_to_Zero\n");
-fclose(output1);
-}
-
-like=1;like2=0;count=0;
-while(1)
-{
-//first want invV = (V1 + V2)^-1; store in V or as U F UT
-
-if(shortcut==0)	//get V=(I+delta_1K1 + delta_2 K2 + ...)^-1 directly
-{
-//start with diagonal matrix
-for(i=0;i<ns;i++)
-{
-for(i2=0;i2<ns;i2++){V[i+i2*ns]=0.0;}
-V[i+i*ns]=1.0;
-}
-
-//add on delta_k K for kinships
-for(k=0;k<num_kins;k++)
-{
-if(deltas[k]!=0)
-{
-for(i=0;i<ns;i++)
-{
-for(i2=0;i2<ns;i2++){V[i+i2*ns]+=deltas[k]*mkins[k][i+i2*ns];}
-}
-}}
-
-//and for regions and gene
-for(r=0;r<num_regs+gflag;r++)
-{
-if(deltas[num_kins+r]!=0)
-{
-token=Xends[r]-Xstarts[r];
-alpha=deltas[num_kins+r]/Xsums[r];
-beta=1.0;
-dgemm_("N", "T", &ns, &ns, &token, &alpha, X+Xstarts[r]*ns, &ns, X+Xstarts[r]*ns, &ns, &beta, V, &ns);
-}
-}
-
-//invert V
-detV=eigen_invert(V, ns, V2, V3, 1);
-}	//end of shortcut=0
-
-if(shortcut==1)	//get F=Dinv-Dinv UTX (invC+XTX)^-1 XTU invD)
-{
-//find D, where V1=UDUT - starts as I - entries should always be nonzero?
-for(i=0;i<ns;i++){D[i]=1.0;}
-
-if(num_kins==1)	//add on E delta_0
-{
-if(deltas[0]!=0)
-{
-for(i=0;i<ns;i++){D[i]+=deltas[0]*E[i];}
-}
-}
-for(i=0;i<ns;i++){if(D[i]<=0){printf("warn %d %f\n", i+1, D[i]);}}
-
-//for detV need detD, detC and detXTVX (last is actually det (invC + XTVX))
-detD=0;for(i=0;i<ns;i++){detD+=log(D[i]);}
-detC=0;detXTVX=0;
-
-if(num_regs+gflag>0)	//now the regions - can replace zero deltas with anything nonzero
-{
-//get XTVX = XTU invDUTX + C^-1 where C = delta/W
-for(i=0;i<ns;i++)
-{
-for(j=0;j<wnum;j++){DUTX[i+j*ns]=UTX[i+j*ns]/D[i];}
-}
-alpha=1.0;beta=0.0;
-dgemm_("T", "N", &wnum, &wnum, &ns, &alpha, UTX, &ns, DUTX, &ns, &beta, XTVX, &wnum);
-
-for(j=0;j<wnum;j++)
-{
-r=Xrec[j];
-value=deltas[num_kins+r]/Xsums[r];
-if(value==0){value=1.0;}
-XTVX[j+j*wnum]+=1.0/value;
-detC+=log(value);
-}
-
-//invert XTVX - something might go wrong when adjusting ???
-detXTVX=eigen_invert(XTVX, wnum, XTVX2, XTVX3, 1);
-
-//then pre multiply by invDUTX and post by t(invDXTU), subtracting from invD
-alpha=1.0;beta=0.0;
-dgemm_("N", "N", &ns, &wnum, &wnum, &alpha, DUTX, &ns, XTVX, &wnum, &beta, DUTXXTVX, &ns);
-alpha=-1.0;beta=0.0;
-dgemm_("N", "T", &ns, &ns, &wnum, &alpha, DUTXXTVX, &ns, DUTX, &ns, &beta, F, &ns);
-for(i=0;i<ns;i++){F[i+i*ns]+=1.0/D[i];}
-}	//end of have region+gene bit
-else	//F is simply Dinv - add detV ???
-{
-for(i=0;i<ns;i++)
-{
-for(i2=0;i2<ns;i2++){F[i+i2*ns]=0;}
-F[i+i*ns]=1.0/D[i];
-}
-}
-
-detV=detD+detC+detXTVX;
-}	//end of shortcut=1
+//now solve
+#include "remlsolve.c"
 
 ///////////////////////////
 
-//now want P = invV - invVZ invZTVZ ZTinvV or H = F - F UTZ invZTVZ ZTU F
-
-if(shortcut==0)	//get invVZ then ZT invVZ
+if(num_kins+num_regs+gflag>0)	//for sds get jacobian - dlambdas/dhers - row k is dls/dhk
 {
-alpha=1.0;beta=0.0;
-dgemm_("N", "N", &ns, &num_covars, &ns, &alpha, V, &ns, Z, &ns, &beta, VZ, &ns);
-dgemm_("T", "N", &num_covars, &num_covars, &ns, &alpha, Z, &ns, VZ, &ns, &beta, ZTVZ, &num_covars);
-}
-
-if(shortcut==1)	//get FUTZ, then ZTU FUTZ (stored in ZTVZ) - could simplify if F diagonal
-{
-alpha=1.0;beta=0.0;
-dgemm_("N", "N", &ns, &num_covars, &ns, &alpha, F, &ns, UTZ, &ns, &beta, FUTZ, &ns);
-dgemm_("T", "N", &num_covars, &num_covars, &ns, &alpha, UTZ, &ns, FUTZ, &ns, &beta, ZTVZ, &num_covars);
-}
-
-//invert ZTinvVZ
-detZTVZ=eigen_invert(ZTVZ, num_covars, ZTVZ2, ZTVZ3, 1);
-
-if(shortcut==0)	//pre and post multiply by invVZ and ZTinvV, and subtract from invV
-{
-for(i=0;i<ns;i++)
-{
-for(i2=0;i2<ns;i2++){P[i+i2*ns]=V[i+i2*ns];}
-}
-alpha=1.0;beta=0.0;
-dgemm_("N", "N", &ns, &num_covars, &num_covars, &alpha, VZ, &ns, ZTVZ, &num_covars, &beta, VZZTVZ, &ns);
-alpha=-1.0;beta=1.0;
-dgemm_("N", "T", &ns, &ns, &num_covars, &alpha, VZZTVZ, &ns, VZ, &ns, &beta, P, &ns);
-}
-
-if(shortcut==1)	//pre and post multiply by FUTZ and ZTUF, and subtract from F
-{
-for(i=0;i<ns;i++)
-{
-for(i2=0;i2<ns;i2++){H[i+i2*ns]=F[i+i2*ns];}
-}
-alpha=1.0;beta=0.0;
-dgemm_("N", "N", &ns, &num_covars, &num_covars, &alpha, FUTZ, &ns, ZTVZ, &num_covars, &beta, FUTZZTVZ, &ns);
-alpha=-1.0;beta=1.0;
-dgemm_("N", "T", &ns, &ns, &num_covars, &alpha, FUTZZTVZ, &ns, FUTZ, &ns, &beta, H, &ns);
-}
-
-///////////////////////////
-
-//get PY, PPY, gam and like
-
-if(shortcut==0)
-{
-alpha=1.0;beta=0.0;
-dgemv_("N", &ns, &ns, &alpha, P, &ns, Y, &one, &beta, PY, &one);
-dgemv_("N", &ns, &ns, &alpha, P, &ns, PY, &one, &beta, PPY, &one);
-}
-
-if(shortcut==1)
-{
-alpha=1.0;beta=0.0;
-if(num_kins==0)	//then U is identity
-{
-dgemv_("N", &ns, &ns, &alpha, H, &ns, Y, &one, &beta, PY, &one);
-dgemv_("N", &ns, &ns, &alpha, H, &ns, PY, &one, &beta, PPY, &one);
-}
-else
-{
-dgemv_("N", &ns, &ns, &alpha, H, &ns, UTY, &one, &beta, HUTY, &one);
-dgemv_("N", &ns, &ns, &alpha, U, &ns, HUTY, &one, &beta, PY, &one);
-dgemv_("N", &ns, &ns, &alpha, H, &ns, HUTY, &one, &beta, HHUTY, &one);
-dgemv_("N", &ns, &ns, &alpha, U, &ns, HHUTY, &one, &beta, PPY, &one);
-}
-}
-
-//get gam=YTPY, from which can get likelihood
-gam=0;for(i=0;i<ns;i++){gam+=PY[i]*Y[i];}
-like3=like2;like2=like;
-like=-.5*nfree*log(2*M_PI*gam/nfree)-.5*detV-.5*detZTVZ;
-
-if(nlost==num_kins+num_regs+gflag){printf("All heritabiliities are zero\n");break;}
-if(fabs(like-like2)<0.0001&&fabs(like2-like3)<0.0001){break;}
-if(count==50){printf("Did not finish after %d REML iterations, but generally current values will be usable\n\n", count);break;}
-
-if(gflag==0)	//screen / file print progress
-{
-if(count==0){printf("Start\t");}
-else{printf("%d\t", count);}
-for(k=0;k<num_kins;k++){printf("%.4f\t", hers[k]);}
-for(r=0;r<num_regs;r++){printf("%.4f\t", hers[num_kins+r]);}
-printf("%f\t", like);
-if(count==0){printf("n/a\t\t%f\t0\n", 0.0001);}
-else{printf("%f\t%f\t%d\n", like-like2, 0.0001, nlost);}
-
-if((output1=fopen(filename1,"a"))==NULL)
-{printf("Error opening %s\n\n", filename1);exit(1);}
-if(count==0){fprintf(output1, "Start\t");}
-else{fprintf(output1, "%d\t", count);}
-for(k=0;k<num_kins;k++){fprintf(output1, "%.4f\t", hers[k]);}
-for(r=0;r<num_regs;r++){fprintf(output1, "%.4f\t", hers[num_kins+r]);}
-fprintf(output1, "%f\t", like);
-if(count==0){fprintf(output1, "n/a\t%f\t0\n", 0.0001);}
-else{fprintf(output1, "%f\t%f\t%d\n", like-like2, 0.0001, nlost);}
-fclose(output1);
-}
-
-////////
-
-//now KPY for mkins, regions and gene (probably unnecessary when hers[k]=0)
-for(k=0;k<num_kins;k++)
-{
-alpha=1.0;beta=0.0;
-dgemv_("N", &ns, &ns, &alpha, mkins[k], &ns, PY, &one, &beta, KPY[k], &one);
-}
-for(r=0;r<num_regs+gflag;r++)
-{
-token=Xends[r]-Xstarts[r];
-XTPY=malloc(sizeof(double)*token);
-alpha=1.0;beta=0.0;
-dgemv_("T", &ns, &token, &alpha, X+Xstarts[r]*ns, &ns, PY, &one, &beta, XTPY, &one);
-alpha=1.0/Xsums[r];beta=0.0;
-dgemv_("N", &ns, &token, &alpha, X+Xstarts[r]*ns, &ns, XTPY, &one, &beta, KPY[num_kins+r], &one);
-free(XTPY);
-}
-
-if(adjust>0)	//K[0]PY should become N/N*K[0]PY - N1/N*K[1]PY - ...
-{
-for(i=0;i<ns;i++)
-{
-KPY[0][i]=KPY[0][i]*adjust/(adjust-regsum);
-for(r=0;r<num_regs+gflag;r++){KPY[0][i]-=Xsums[r]/(adjust-regsum)*KPY[1+r][i];}
-}
-}
-
-////////
-
-//now PKPY for mkins, regions and gene (again, probably unnecessary when hers[k]=0)
-for(k=0;k<num_kins+num_regs+gflag;k++)
-{
-if(shortcut==0)
-{
-alpha=1.0;beta=0.0;
-dgemv_("N", &ns, &ns, &alpha, P, &ns, KPY[k], &one, &beta, PKPY[k], &one);
-}
-if(shortcut==1)	//U H UT KPY
-{
-alpha=1.0;beta=0.0;
-if(num_kins==0)	//then U is identity
-{
-dgemv_("N", &ns, &ns, &alpha, H, &ns, KPY[k], &one, &beta, PKPY[k], &one);
-}
-else
-{
-dgemv_("T", &ns, &ns, &alpha, U, &ns, KPY[k], &one, &beta, UTKPY, &one);
-dgemv_("N", &ns, &ns, &alpha, H, &ns, UTKPY, &one, &beta, HUTKPY, &one);
-dgemv_("N", &ns, &ns, &alpha, U, &ns, HUTKPY, &one, &beta, PKPY[k], &one);
-}
-}
-}
-
-////////
-
-//get trace PK for kins, regions and gene (again, unnecessary when hers[k]=0)
-for(k=0;k<num_kins;k++)
-{
-traces[k]=0;
-if(shortcut==0)
-{
-for(i=0;i<ns;i++)
-{
-for(i2=0;i2<ns;i2++){traces[k]+=P[i+i2*ns]*mkins[k][i2+i*ns];}
-}
-}
-if(shortcut==1)	//if here, k=0 so tr(PK) = tr(UHUTUEUT) = tr(HE)
-{
-for(i=0;i<ns;i++){traces[k]+=E[i]*H[i+i*ns];}
-}
-}
-for(r=0;r<num_regs+gflag;r++)
-{
-traces[num_kins+r]=0;
-token=Xends[r]-Xstarts[r];
-PX=malloc(sizeof(double)*ns*token);
-
-if(shortcut==0)	//tr(PK) = tr(PX XT/N)
-{
-alpha=1.0;beta=0.0;
-dgemm_("N", "N", &ns, &token, &ns, &alpha, P, &ns, X+Xstarts[r]*ns, &ns, &beta, PX, &ns);
-
-for(i=0;i<ns;i++)
-{
-for(j=0;j<token;j++)
-{traces[num_kins+r]+=PX[i+j*ns]*X[i+(Xstarts[r]+j)*ns]/Xsums[r];}
-}
-}
-if(shortcut==1)	//tr(PK) = tr(HUTX XTU) (can store HUTX in PX)
-{
-alpha=1.0;beta=0.0;
-dgemm_("N", "N", &ns, &token, &ns, &alpha, H, &ns, UTX+Xstarts[r]*ns, &ns, &beta, PX, &ns);
-for(i=0;i<ns;i++)
-{
-for(j=0;j<token;j++)
-{traces[num_kins+r]+=PX[i+j*ns]*UTX[i+(Xstarts[r]+j)*ns]/Xsums[r];}
-}
-}
-
-free(PX);
-}
-
-if(adjust>0)	//tr(K[0]P) should become N/N*tr(K[0]P) - N1/N*tr(K[1]P) - ...
-{
-traces[0]=traces[0]*adjust/(adjust-regsum);
-for(r=0;r<num_regs+gflag;r++){traces[0]-=Xsums[r]/(adjust-regsum)*traces[1+r];}
-}
-
-////////
-
-//add on priors ???
-
-///////////////////////////
-
-//fill AI and BI - set to 0/1 elements corresponding to lambdas fixed at zero
-//gam=YTPY, gam2a=YTPVaPY, gam3ab=YTPVaPVbPY
-//get AI = -2nd deriv = n/2/gam (-gam2agam2b/gam +gam3ab)
-
-for(k=0;k<num_kins+num_regs+gflag;k++)
-{
-//diagonals and B
-if(herfixes[k]<2)	//else not allowed to update 
-{
-gam2a=0;for(i=0;i<ns;i++){gam2a+=PKPY[k][i]*Y[i];}
-gam3=0;for(i=0;i<ns;i++){gam3+=PKPY[k][i]*KPY[k][i];}
-AI[k+k*(num_kins+num_regs+gflag)]=.5*nfree/gam*(gam3-pow(gam2a,2)/gam);
-BI[k]=.5*nfree/gam*gam2a-.5*traces[k];
-}
-else
-{AI[k+k*(num_kins+num_regs+gflag)]=1.0;BI[k]=0.0;}
-
-//off-diagonals
-for(k2=0;k2<k;k2++)
-{
-if(herfixes[k]<2&&herfixes[k2]<2)	//else not allowed to update
-{
-gam2b=0;for(i=0;i<ns;i++){gam2b+=PKPY[k2][i]*Y[i];}
-gam3=0;for(i=0;i<ns;i++){gam3+=PKPY[k][i]*KPY[k2][i];}
-AI[k+k2*(num_kins+num_regs+gflag)]=.5*nfree/gam*(gam3-gam2a*gam2b/gam);
-AI[k2+k*(num_kins+num_regs+gflag)]=AI[k+k2*(num_kins+num_regs+gflag)];
-}
-else
-{AI[k+k2*(num_kins+num_regs+gflag)]=0;AI[k2+k*(num_kins+num_regs+gflag)]=0;}
-}}	//end of k loop
-
-//save AI but setting zero her terms to zero ???
-for(k=0;k<num_kins+num_regs+gflag;k++)
-{
-for(k2=0;k2<num_kins+num_regs+gflag;k2++)
-{AIsave[k+k2*(num_kins+num_regs+gflag)]=AI[k2+k*(num_kins+num_regs+gflag)];}
-if(herfixes[k]==2){AIsave[k+k*(num_kins+num_regs+gflag)]=0;}
-}
-
-//update is invAI BI
-(void)eigen_invert(AI, num_kins+num_regs+gflag, AI2, AI3, 0);
-
 token=num_kins+num_regs+gflag;
+sum=0;for(k=0;k<token;k++){sum+=hers[k];}
+for(k=0;k<num_kins+num_regs+gflag;k++)
+{
+for(k2=0;k2<token;k2++){J[k+k2*token]=hers[k2]*pow(1-sum,-2);}
+J[k+k*token]+=pow(1-sum,-1);
+}
+
+//want AI = J * AIsave * t(J), with zeros added, then invert
 alpha=1.0;beta=0.0;
-dgemv_("N", &token, &token, &alpha, AI, &token, BI, &one, &beta, lamdiffs, &one);
-
-//make sure differences not too large ???
-sum=0;for(k=0;k<num_kins+num_regs+gflag;k++){sum+=lambdas[k];}
-for(k=0;k<num_kins+num_regs+gflag;k++)
+dgemm_("N", "T", &token, &token, &token, &alpha, AIsave, &token, J, &token, &beta, AI3, &token);
+dgemm_("N", "N", &token, &token, &token, &alpha, J, &token, AI3, &token, &beta, AI, &token);
+for(k=0;k<token;k++)
 {
-if(herfixes[k]<2)
+if(herfixes[k]>=2)
 {
-if(lamdiffs[k]>.1*pow(1+sum,2)){lamdiffs[k]=.1*pow(1+sum,2);}
-if(lamdiffs[k]<-.1*pow(1+sum,2)){lamdiffs[k]=-.1*pow(1+sum,2);}
-if(lamdiffs[k]<0.0001-lambdas[k]){lamdiffs[k]=0.0001-lambdas[k];}
-lambdas[k]+=lamdiffs[k];
+for(k2=0;k2<token;k2++){AI[k+k2*token]=0;AI[k2+k*token]=0;}
+AI[k+k*token]=1;
 }
 }
-
-sum=0;for(k=0;k<num_kins+num_regs+gflag;k++){sum+=lambdas[k];}
-for(k=0;k<num_kins+num_regs+gflag;k++)
+(void)eigen_invert(AI, num_kins+num_regs+gflag, AI2, AI3, 0);
+for(k=0;k<token;k++)
 {
-hers[k]=lambdas[k]/(1+sum);
-
-if(lambdas[k]<=0.0001){herfixes[k]++;}
-else{herfixes[k]=0;}
-
-if(herfixes[k]==2)	//lambda has been at 0.0001 for two consecutive iterations
-{
-lambdas[k]=0;hers[k]=0;nlost++;
-if(k>=num_kins)	//blank out part of X and for shortcut = 1 corresponding part of UTX
-{
-for(j=Xstarts[k-num_kins];j<Xends[k-num_kins];j++)
-{
-for(i=0;i<ns;i++)
-{
-X[i+j*ns]=0;
-if(shortcut==1){UTX[i+j*ns]=0;}
-}}
+if(herfixes[k]>=2){AI[k+k*(num_kins+num_regs+gflag)]=0;}
 }
 }
-
-//get new deltas
-if(adjust==0){deltas[k]=lambdas[k];}
-if(adjust>0&&k==0){deltas[0]=adjust/(adjust-regsum)*lambdas[0];}
-if(adjust>0&&k>0){deltas[k]=lambdas[k]-Xsums[k-1]/(adjust-regsum)*lambdas[0];}
-}
-
-count++;
-}	//end of while loop
-
-///////////////////////////
-
-if(gflag==0)	//screen print
-{
-printf("Final\t");
-for(k=0;k<num_kins;k++){printf("%.4f\t", hers[k]);}
-for(r=0;r<num_regs;r++){printf("%.4f\t", hers[num_kins+r]);}
-printf("%f\t%f\t%f\t%d\n", like, like-like2, 0.0001, nlost);
-}
-
-if(gflag==1)	//do score test
-{
-
-
-
-}	//end of gflag=1
 
 /////////
 
@@ -741,6 +278,8 @@ else
 alpha=1.0;beta=0.0;
 dgemv_("T", &num_covars, &num_covars, &alpha, ZTVZ, &num_covars, ZTVY, &one, &beta, thetas, &one);
 
+if(g==-1)	//print results
+{
 sprintf(filename2,"%s.reml", outfile);
 if((output2=fopen(filename2,"w"))==NULL)
 {printf("Error opening %s\n\n",filename2);exit(1);}
@@ -751,17 +290,18 @@ if(num_regs>0){fprintf(output2, "Regfile: %s.reg.blup\n", outfile);}
 else{fprintf(output2, "Regfile: none\n");}
 //??? did have a line for whether completed properly or not
 fprintf(output2, "Component Heritability SD\n");
-for(k=0;k<num_kins;k++){fprintf(output2, "Her_K%d %.4f NA\n", k+1, hers[k]);}
-for(r=0;r<num_regs;r++){fprintf(output2, "Her_R%d %.4f NA\n", r+1, hers[num_kins+r]);}
+for(k=0;k<num_kins;k++){fprintf(output2, "Her_K%d %.6f %.6f\n", k+1, hers[k], pow(AI[k+k*(num_kins+num_regs+gflag)],.5));}
+for(r=0;r<num_regs;r++){fprintf(output2, "Her_R%d %.6f %.6f\n", r+1, hers[num_kins+r], pow(AI[num_kins+r+(num_kins+r)*(num_kins+num_regs+gflag)],.5));}
 fprintf(output2, "Intercept %.4f %.4f\n", thetas[0], pow(ZTVZ[0],.5));
-for(j=1;j<num_covars;j++){fprintf(output2, "Fixed%d %.4f %.4f\n",j, thetas[j], pow(ZTVZ[j+j*num_covars],.5));} 
+for(j=1;j<num_covars;j++){fprintf(output2, "Fixed%d %.6f %.6f\n",j, thetas[j], pow(ZTVZ[j+j*num_covars],.5));} 
 fclose(output2);
+}
 
 //breeding values are kin_k lambda_k invV (Y-fixed) = kin_k lambda_k UFUT (Y-fixed)
 
 for(i=0;i<ns;i++){Yadj[i]=Y[i];}
 alpha=-1.0;beta=1.0;
-dgemv_("N", &ns, &num_covars, &alpha, covar, &ns, thetas, &one, &beta, Yadj, &one);
+dgemv_("N", &ns, &num_covars, &alpha, Z, &ns, thetas, &one, &beta, Yadj, &one);
 
 alpha=1.0;beta=0.0;
 if(shortcut==0)
@@ -803,8 +343,8 @@ if(adjust>0)	//mG[0] should become N/N*mG[0] - N1/N*mG[1] - ...
 {
 for(i=0;i<ns;i++)
 {
-mGtemp[0][i]=mGtemp[0][i]*adjust/(adjust-regsum);
-for(r=0;r<num_regs+gflag;r++){mGtemp[0][i]-=Xsums[r]/(adjust-regsum)*mGtemp[1+r][i];}
+mGtemp[0][i]=mGtemp[0][i]*adjust/(adjust-adjust2);
+for(r=0;r<num_regs+gflag;r++){mGtemp[0][i]-=Xsums[r]/(adjust-adjust2)*mGtemp[1+r][i];}
 }
 }
 
@@ -842,12 +382,12 @@ else	//must scale and subtract regions (must have k=0)
 {
 for(i=0;i<ns;i++)
 {
-for(i2=0;i2<ns;i2++){kintemp[i+i2*ns]=adjust/(adjust-regsum)*mkins[0][i+i2*ns];}
+for(i2=0;i2<ns;i2++){kintemp[i+i2*ns]=adjust/(adjust-adjust2)*mkins[0][i+i2*ns];}
 }
 for(r=0;r<num_regs+gflag;r++)
 {
 token=Xends[r]-Xstarts[r];
-alpha=-1.0/(adjust-regsum);
+alpha=-1.0/(adjust-adjust2);
 beta=1.0;
 dgemm_("N", "T", &ns, &ns, &token, &alpha, X+Xstarts[r]*ns, &ns, X+Xstarts[r]*ns, &ns, &beta, kintemp, &ns);
 }
@@ -885,7 +425,7 @@ else	//UTG2 = D' - D'UTX inv(-W1I+XTUD'UTX) XTUD' where D'=W1/WinvE
 {
 for(i=0;i<ns;i++)
 {
-if(E[i]>0){D[i]=(adjust-regsum)/adjust/E[i];}
+if(E[i]>0){D[i]=(adjust-adjust2)/adjust/E[i];}
 else{D[i]=0;}
 }
 
@@ -896,7 +436,7 @@ for(j=0;j<wnum;j++){DUTX[i+j*ns]=UTX[i+j*ns]*D[i];}
 }
 alpha=1.0;beta=0.0;
 dgemm_("T", "N", &wnum, &wnum, &ns, &alpha, UTX, &ns, DUTX, &ns, &beta, XTVX, &wnum);
-for(j=0;j<wnum;j++){XTVX[j+j*wnum]-=(adjust-regsum);}
+for(j=0;j<wnum;j++){XTVX[j+j*wnum]-=(adjust-adjust2);}
 
 (void)eigen_invert(XTVX, wnum, XTVX2, XTVX3, 0);
 
@@ -919,6 +459,8 @@ free(UTG);free(UTG2);
 
 /////////
 
+if(g==-1)	//save
+{
 sprintf(filename3,"%s.indi.blp", outfile);
 if((output3=fopen(filename3,"w"))==NULL)
 {printf("Error opening %s\n\n",filename3);exit(1);}
@@ -930,21 +472,25 @@ for(r=0;r<num_regs;r++){fprintf(output3, "0\t%f\t", mG[num_kins+r][i]);}
 fprintf(output3, "\n");
 }
 fclose(output3);
+}
 
 ///////////////////////////
 
-if(num_regs>0)	//get region effect sizes
+if(num_regs+gflag>0)	//get region (and gene) effect sizes and save
 {
 effects=malloc(sizeof(double)*wnum);
 for(j=0;j<wnum;j++){effects[j]=0;}
+if(num_regs>0)
+{
 effectsfull=malloc(sizeof(double*)*(num_regs+1));
 for(r=0;r<num_regs+1;r++)
 {
 effectsfull[r]=malloc(sizeof(double)*rlength);
 for(j=0;j<rlength;j++){effectsfull[r][j]=0;}
 }
+}
 
-for(r=0;r<num_regs;r++)	//when testing a gene, don't need regions
+for(r=0;r<num_regs+gflag;r++)
 {
 if(hers[num_kins+r]>0)	//when her=0 leave at zero
 {
@@ -981,13 +527,16 @@ dgemv_("T", &ns, &token, &alpha, X+Xstarts[r]*ns, &ns, mG2[num_kins+r], &one, &b
 free(UTG);
 }	//end of token>ns
 
+if(r<num_regs)
+{
 for(j=Xstarts[r];j<Xends[r];j++)
 {effectsfull[r][Xrev[j]]+=effects[j]*rmults[Xrev[j]]*pow(rweights[Xrev[j]],.5);
-effectsfull[num_regs][Xrev[j]]++;
+effectsfull[num_regs][Xrev[j]]++;}
 }
 }}	//end of her>0 and r loop
 
-//print these
+if(g==-1)	//print these
+{
 sprintf(filename4,"%s.reg.blup", outfile);
 if((output4=fopen(filename4,"w"))==NULL)
 {printf("Error opening %s\n\n",filename4);exit(1);}
@@ -1004,28 +553,188 @@ fprintf(output4,"\n");
 }
 }
 fclose(output4);
+}
 
-free(effects);for(r=0;r<num_regs+1;r++){free(effectsfull[r]);}free(effectsfull);
-}	//end of num_regs+glag>0
+if(g>0)	//print gene effects
+{
+if((output5=fopen(outfile,"a"))==NULL)
+{printf("Error opening %s\n\n",outfile);exit(1);}
+for(j=Xstarts[num_regs];j<Xends[num_regs];j++)
+{
+fprintf(output5,"%d %s %f\n", g, gprednames[Xrev[j]], effects[j]*gmults[Xrev[j]]*pow(gweights[Xrev[j]],.5));
+}
+fclose(output5);
+}
+
+free(effects);
+if(num_regs>0){for(r=0;r<num_regs+1;r++){free(effectsfull[r]);}free(effectsfull);}
+}	//end of num_regs>0 & g>0
+
+/////////
+
+if(g==0)	//need to save P or H and like
+{
+if(shortcut==0)
+{
+for(i=0;i<ns*ns;i++){Mnull[i]=P[i];}
+}
+if(shortcut==1)
+{
+for(i=0;i<ns*ns;i++){Mnull[i]=H[i];}
+}
+reml[2]=like;
+}
+
+if(g>0)	//do lrt and score tests and load up reml
+{
+statlrt=2*(like-likenull);
+pvalrt=cdfN(-pow(statlrt,.5));
+if(statlrt<0){pvalrt=1;}
+
+//get bf ???
+
+token=Xends[num_regs]-Xstarts[num_regs];
+if(adjust==0)	//use nullP or nullH and get PY
+{
+if(shortcut==0)
+{
+for(i=0;i<ns*ns;i++){P[i]=Mnull[i];}
+alpha=1.0;beta=0.0;
+dgemv_("N", &ns, &ns, &alpha, P, &ns, Y, &one, &beta, PY, &one);
+}
+if(shortcut==1)
+{
+for(i=0;i<ns*ns;i++){H[i]=Mnull[i];}
+if(num_kins==0)	//then U is the identity
+{
+dgemv_("N", &ns, &ns, &alpha, H, &ns, Y, &one, &beta, PY, &one);
+}
+else
+{
+dgemv_("N", &ns, &ns, &alpha, H, &ns, UTY, &one, &beta, HUTY, &one);
+dgemv_("N", &ns, &ns, &alpha, U, &ns, HUTY, &one, &beta, PY, &one);
+}
+}
+}	//end of adjust=0
+else	//need to reiterate with her set to zero
+{
+if(herfixes[num_kins+num_regs]<2)	//re-iterate with gene her zero
+{
+lambdas[num_kins+num_regs]=0;hers[num_kins+num_regs]=0;nlost++;
+for(j=Xstarts[num_regs];j<Xends[num_regs];j++)
+{
+for(i=0;i<ns;i++)
+{
+X[i+j*ns]=0;
+if(shortcut==1){UTX[i+j*ns]=0;}
+}}
+#include "remlsolve.c"
+}
+}
+
+if(herfixes[num_kins+num_regs]>=2)	//restore X and perhaps UTX
+{
+for(i=0;i<ns*token;i++){X[Xstarts[num_regs]*ns+i]=G[i];}
+if(shortcut==1)
+{
+if(num_kins==0)
+{
+for(i=0;i<ns*token;i++){UTX[Xstarts[num_regs]*ns+i]=X[Xstarts[num_regs]*ns+i];}
+}
+else
+{
+alpha=1.0;beta=0.0;
+dgemm_("T", "N", &ns, &token, &ns, &alpha, U, &ns, X+Xstarts[num_regs]*ns, &ns, &beta, UTX+Xstarts[num_regs]*ns, &ns);
+}
+}
+}
+
+//get KPY
+XTPY=malloc(sizeof(double)*token);
+alpha=1.0;beta=0.0;
+dgemv_("T", &ns, &token, &alpha, X+Xstarts[num_regs]*ns, &ns, PY, &one, &beta, XTPY, &one);
+alpha=1.0/Xsums[num_regs];beta=0.0;
+dgemv_("N", &ns, &token, &alpha, X+Xstarts[num_regs]*ns, &ns, XTPY, &one, &beta, KPY[num_kins+num_regs], &one);
+free(XTPY);
+
+//and PKPY
+if(shortcut==0)
+{
+alpha=1.0;beta=0.0;
+dgemv_("N", &ns, &ns, &alpha, P, &ns, KPY[num_kins+num_regs], &one, &beta, PKPY[num_kins+num_regs], &one);
+}
+if(shortcut==1)	//U H UT KPY
+{
+alpha=1.0;beta=0.0;
+if(num_kins==0)	//then U is diagonal
+{
+dgemv_("N", &ns, &ns, &alpha, H, &ns, KPY[num_kins+num_regs], &one, &beta, PKPY[num_kins+num_regs], &one);
+}
+else
+{
+dgemv_("T", &ns, &ns, &alpha, U, &ns, KPY[num_kins+num_regs], &one, &beta, UTKPY, &one);
+dgemv_("N", &ns, &ns, &alpha, H, &ns, UTKPY, &one, &beta, HUTKPY, &one);
+dgemv_("N", &ns, &ns, &alpha, U, &ns, HUTKPY, &one, &beta, PKPY[num_kins+num_regs], &one);
+}
+}
+
+//get tr(PK)
+traces[num_kins+num_regs]=0;
+PX=malloc(sizeof(double)*ns*token);
+if(shortcut==0)	//tr(PK) = tr(PX XT/N)
+{
+alpha=1.0;beta=0.0;
+dgemm_("N", "N", &ns, &token, &ns, &alpha, P, &ns, X+Xstarts[num_regs]*ns, &ns, &beta, PX, &ns);
+for(i=0;i<ns;i++)
+{
+for(j=0;j<token;j++)
+{traces[num_kins+num_regs]+=PX[i+j*ns]*X[i+(Xstarts[num_regs]+j)*ns]/Xsums[num_regs];}
+}
+}
+if(shortcut==1)	//tr(PK) = tr(HUTX XTU) (can store HUTX in PX)
+{
+alpha=1.0;beta=0.0;
+dgemm_("N", "N", &ns, &token, &ns, &alpha, H, &ns, UTX+Xstarts[num_regs]*ns, &ns, &beta, PX, &ns);
+for(i=0;i<ns;i++)
+{
+for(j=0;j<token;j++)
+{traces[num_kins+num_regs]+=PX[i+j*ns]*UTX[i+(Xstarts[num_regs]+j)*ns]/Xsums[num_regs];}
+}
+}
+free(PX);
+
+gam=0;for(i=0;i<ns;i++){gam+=PY[i]*Y[i];}
+gam2a=0;for(i=0;i<ns;i++){gam2a+=PKPY[num_kins+num_regs][i]*Y[i];}
+gam3=0;for(i=0;i<ns;i++){gam3+=PKPY[num_kins+num_regs][i]*KPY[num_kins+num_regs][i];}
+
+d2=.5*nfree/gam*gam2a-.5*traces[num_kins+num_regs];
+dd2=-.5*nfree/gam*(gam3-pow(gam2a,2)/gam);
+statscore=d2/pow(-dd2,.5);
+pvascore=cdfN(-statscore);
+if(dd2>0){pvascore=1.0;}
+
+reml[0]=hers[num_kins+num_regs];
+reml[1]=pow(AI[num_kins+num_regs+(num_kins+num_regs)*(num_kins+num_regs+gflag)],.5);
+reml[2]=like;reml[3]=statlrt;reml[4]=pvalrt/2;reml[5]=statscore;reml[6]=pvascore;
+//??? do something for log and bf
+}	//end of g>0
 
 /////////////////////////// 
 
 //free variables
 
-free(Y);free(Z);
 free(lambdas);free(lamdiffs);free(deltas);free(hers);free(herfixes);
 
 if(num_regs+gflag>0)
 {
-free(X);free(Xsums);free(Xstarts);free(Xends);free(Xrec);free(Xrev);
-if(shortcut==1)
-{free(UTX);free(DUTX);free(XTVX);free(XTVX2);free(XTVX3);free(DUTXXTVX);}
+free(G);
+if(shortcut==1){free(UTX);free(DUTX);free(XTVX);free(XTVX2);free(XTVX3);free(DUTXXTVX);}
 }
 
 free(ZTVZ);free(ZTVZ2);free(ZTVZ3);free(PY);free(PPY);free(traces);
 for(k=0;k<num_kins+num_regs+gflag;k++){free(KPY[k]);free(PKPY[k]);}
 if(num_kins+num_regs+gflag>0){free(KPY);free(PKPY);}
-free(AI);free(AI2);free(AI3);free(AIsave);free(BI);
+free(AI);free(AI2);free(AI3);free(AIsave);free(BI);free(J);
 free(ZTVY);free(Yadj);free(VYadj);free(thetas);
 
 for(k=0;k<num_kins+num_regs+gflag;k++){free(mG[k]);free(mGtemp[k]);free(mG2[k]);}
@@ -1045,7 +754,52 @@ free(UTYadj);free(FUTYadj);
 }
 
 return(0);
-}	//end of reml_multi
+}	//end of multi_reml
 
 
 
+
+
+/*
+X=malloc(sizeof(double)*ns*(maxlength+glength));
+Xsums=malloc(sizeof(double)*(num_regs+gflag));
+Xstarts=malloc(sizeof(int)*(num_regs+gflag));
+Xends=malloc(sizeof(int)*(num_regs+gflag));
+Xrec=malloc(sizeof(int)*(maxlength+glength));
+Xrev=malloc(sizeof(int)*(maxlength+glength));
+
+wnum=0;adjust2=0;
+for(r=0;r<num_regs;r++)
+{
+Xstarts[r]=wnum;Xsums[r]=0;
+for(j=0;j<regindex[r][0];j++)
+{
+j2=regindex[r][1+j];
+if(rmults[j2]!=-1&&rweights[j2]>0)
+{
+for(i=0;i<ns;i++){X[i+wnum*ns]=rdata[kindex[1+i]+j2*ns];}
+Xrec[wnum]=r;
+Xrev[wnum]=j2;
+Xsums[r]+=rweights[j2];
+wnum++;
+}}
+Xends[r]=wnum;
+adjust2+=Xsums[r];
+}
+if(gflag==1)
+{
+Xstarts[num_regs]=wnum;Xsums[num_regs]=0;
+for(j=0;j<glength;j++)
+{
+if(gmults[j]!=-1&&gweights[j]>0)
+{
+for(i=0;i<ns;i++){X[i+wnum*ns]=gdata[kindex[1+i]+j*ns];}
+Xrec[wnum]=num_regs;
+Xrev[wnum]=j;
+Xsums[num_regs]+=gweights[j];
+wnum++;
+}}
+Xends[num_regs]=wnum;
+adjust2+=Xsums[num_regs];
+}
+*/

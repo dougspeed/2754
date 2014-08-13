@@ -22,44 +22,36 @@ for(j=0;j<num_preds;j++){keeppreds[j]=j;}
 
 if(strcmp(bpredfile,"blank")!=0)
 {
-allsnps=malloc(sizeof(char*)*num_preds);
-for(j=0;j<num_preds;j++){allsnps[j]=malloc(sizeof(char)*100);}
-read_strings(mapfile, allsnps, num_preds, 2, 0);
+allpreds=malloc(sizeof(char*)*num_preds);
+for(j=0;j<num_preds;j++){allpreds[j]=malloc(sizeof(char)*100);}
+read_strings(mapfile, allpreds, num_preds, 2, 0);
 
 count=countrows(bpredfile);
 printf("Reading list of %d predictors to extract from %s\n", count, bpredfile);
-usesnps=malloc(sizeof(char*)*count);
-for(j=0;j<count;j++){usesnps[j]=malloc(sizeof(char)*100);}
-read_strings(bpredfile, usesnps, count, 1, 0);
+usepreds=malloc(sizeof(char*)*count);
+for(j=0;j<count;j++){usepreds[j]=malloc(sizeof(char)*100);}
+read_strings(bpredfile, usepreds, count, 1, 0);
 
-num_preds_use=find_strings(allsnps, num_preds, usesnps, count, keeppreds, NULL);
+num_preds_use=find_strings(allpreds, num_preds, usepreds, count, keeppreds, NULL);
 if(num_preds_use==0)
 {printf("Error, found no predictors in %s in %s\n\n", bpredfile, mapfile);exit(1);}
 
-for(j=0;j<num_preds;j++){free(allsnps[j]);}free(allsnps);
-for(j=0;j<count;j++){free(usesnps[j]);}free(usesnps);
+for(j=0;j<num_preds;j++){free(allpreds[j]);}free(allpreds);
+for(j=0;j<count;j++){free(usepreds[j]);}free(usepreds);
 }
 }	//end of num_preds!=-1
 
 
-//if re-calculating weights must reduce keeppreds
+//if re-calculating weights must reduce keeppreds (store original ones in keeppredsb)
 if(strcmp(weightsfile,"blank")!=0&&(mode==1||mode==2||mode==3))
 {
 num_preds_useb=num_preds_use;
 keeppredsb=malloc(sizeof(int)*num_preds_use);
 for(j=0;j<num_preds_use;j++){keeppredsb[j]=keeppreds[j];}
 
-chr=malloc(sizeof(int)*num_preds_useb);
 prednames=malloc(sizeof(char*)*num_preds_useb);
 for(j=0;j<num_preds_useb;j++){prednames[j]=malloc(sizeof(char)*100);}
-bp=malloc(sizeof(double)*num_preds_useb);
-al1=malloc(sizeof(char)*num_preds_useb);
-al2=malloc(sizeof(char)*num_preds_useb);
-
-if(strcmp(chiamofile,"blank")!=0)
-{read_mapfile(mapfile, chr, prednames, bp, al1, al2, num_preds_useb, keeppredsb, 0);}
-if(strcmp(chiamofile,"blank")==0)
-{read_mapfile(mapfile, chr, prednames, bp, al1, al2, num_preds_useb, keeppredsb, 1);}
+read_mapfile(mapfile, NULL, prednames, NULL, NULL, NULL, num_preds_useb, keeppredsb);
 
 weights=malloc(sizeof(double)*num_preds_useb);
 read_weightfile(weightsfile, weights, num_preds_useb, keeppredsb, prednames, mapfile);
@@ -72,7 +64,6 @@ if(weights[j]>0){keeppreds[count]=keeppredsb[j];count++;}
 num_preds_use=count;
 
 free(weights);
-free(chr);free(bp);free(al1);free(al2);
 for(j=0;j<num_preds_useb;j++){free(prednames[j]);}free(prednames);
 
 printf("Re-calcluating weights using the %d (of %d) predictors with non-zero weights from first run\n\n", num_preds_use, num_preds_useb);
@@ -81,10 +72,10 @@ printf("Re-calcluating weights using the %d (of %d) predictors with non-zero wei
 
 //and which samples we are using
 
-if(strcmp(famfile,"blank")!=0)
-{
-num_samples=countrows(famfile);
+if(strcmp(famfile,"blank")!=0){num_samples=countrows(famfile);}
 
+if(num_samples!=-1)
+{
 num_samples_use=num_samples;
 keepsamps=malloc(sizeof(int)*num_samples);
 for(i=0;i<num_samples;i++){keepsamps[i]=i;}
@@ -108,6 +99,8 @@ if(num_samples_use==0)
 for(i=0;i<num_samples;i++){free(allsamps[i]);}free(allsamps);
 for(i=0;i<count;i++){free(usesamps[i]);}free(usesamps);
 }
+}
+
 
 //if subtracting regions, set keepsamps so individuals match first kinship file ids
 if(mode==24&&num_regs>0)
@@ -128,7 +121,6 @@ if(num_samples_use!=count)
 
 for(i=0;i<num_samples;i++){free(allsamps[i]);}free(allsamps);
 for(i=0;i<count;i++){free(usesamps[i]);}free(usesamps);
-}
 }
 
 

@@ -37,8 +37,6 @@ if((output=fopen(filename,"wb"))==NULL)
 {printf("Error writing to %s\n\n",filename);exit(1);}
 }
 
-length=(int)((num_samples_use-1)/4)+1;
-
 bittotal=(int)((data_length-1)/bitsize+1);
 current=0;weightsum=0;
 for(bit=0;bit<bittotal;bit++)
@@ -65,7 +63,7 @@ if(value==(int)value){fprintf(output,"%d ", (int)value);}
 else{fprintf(output,"%f ", value);}
 }
 else
-{fprintf(output,"NA ", value);}
+{fprintf(output,"NA ");}
 }
 if(mode==26)
 {

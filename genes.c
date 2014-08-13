@@ -352,7 +352,7 @@ return(0);
 int get_genes_boundaries(char *folder, int partition, char **genenames, int *gchr, int *gstarts, int *gends, int *gpartitions, int num_genes, int num_preds_use)
 {
 int j;
-int data_length;
+int gmax;
 
 int readint;
 char readchar;
@@ -376,7 +376,7 @@ readchar=0;
 while(readchar!=10){(void)fscanf(input,"%c", &readchar);}
 
 //now read in lines - index, partition, start, end, name
-data_length=0;
+gmax=0;
 for(j=0;j<num_genes;j++)
 {
 if(fscanf(input, "%d %d %d %d %s %d %f %d", &readint, gpartitions+j, gstarts+j, gends+j, genenames[j], &readint, &readfloat, gchr+j)!=8)
@@ -396,15 +396,15 @@ if(gends[j]>num_preds_use&&num_preds_use!=-1)
 readchar=0;
 while(readchar!=10){(void)fscanf(input,"%c", &readchar);}
 
-if(gpartitions[j]==partition&&gends[j]-gstarts[j]>data_length){data_length=gends[j]-gstarts[j];}
+if(gpartitions[j]==partition&&gends[j]-gstarts[j]>gmax){gmax=gends[j]-gstarts[j];}
 }	//end of j loop
 
 fclose(input);
 
-if(data_length==0&&partition!=-1)
+if(gmax==0&&partition!=-1)
 {printf("Error reading %s; there are no genes (of non-zero length) in Partition %d\n\n", filename, partition);exit(1);}
 
-return(data_length);
+return(gmax);
 }	//end of get_genes_boundaries
 
 ///////////////////////////

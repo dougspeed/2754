@@ -172,12 +172,6 @@ int *found, *rev, *kindex;
 double *respb;
 char **ids1b, **ids2b;
 
-//any need to do this?
-if(respindex[0][0]==num_samples_use){return(num_samples_use);}
-if(num_resps_use==2)
-{
-if(respindex[1][0]==num_samples_use){return(num_samples_use);}
-}
 
 //find union of all samples
 found=malloc(sizeof(int)*num_samples_use);
@@ -198,10 +192,7 @@ if(found[i]>0){kindex[count]=i;rev[i]=count;count++;}
 if(count<num_samples_use)
 {
 respb=malloc(sizeof(double)*num_samples_use*num_resps_use);
-for(m=0;m<num_resps_use;m++)
-{
-for(i=0;i<num_samples_use;i++){respb[i+m*num_samples_use]=resp[i+m*num_samples_use];}
-}
+for(i=0;i<num_samples_use*num_resps_use;i++){respb[i]=resp[i];}
 for(m=0;m<num_resps_use;m++)
 {
 for(i=0;i<count;i++){resp[i+m*count]=respb[kindex[i]+m*num_samples_use];}

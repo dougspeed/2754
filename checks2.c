@@ -35,6 +35,9 @@ if(strcmp(respfile,"blank")==0)
 {printf("Error, necessary to provide phenotypic values using argument \"--pheno\"\n\n");exit(1);}
 }
 
+if(mode==11&&num_regs>0)
+{printf("Error, for bivariate gene tests, can not have regions\n\n");exit(1);}
+
 if(mode==17&&num_kins!=1)
 {printf("Error, necessary to provide a (single) kinship file using either \"--grm\" or \"--mgrm\"\n\n");exit(1);}
 

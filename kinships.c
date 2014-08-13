@@ -231,6 +231,7 @@ sprintf(filename6, "%s.grm.raw", outfile);
 sprintf(filename7, "%s.grm", outfile);
 
 //write ids, kins and dividers
+
 if((output2=fopen(filename2,"wb"))==NULL)
 {printf("Error writing to %s\n\n",filename2);exit(1);}
 if((output3=fopen(filename3,"wb"))==NULL)
@@ -239,6 +240,7 @@ if((output3=fopen(filename3,"wb"))==NULL)
 sum=0;trace=0;
 value2=weightsum;
 for(i=0;i<num_samples_use;i++)
+
 {
 for(i2=0;i2<=i;i2++)
 {

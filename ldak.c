@@ -1,6 +1,8 @@
 //??? - sorting strings once only?
 //??? at some point make a guess of memory requirements?
-//??? reml with no kin / region
+//??? read eigenfile
+//??? get bf for generalized reml
+//??? need to look at role of ea in bivariate
 
 /*
 Copyright 2014 Doug Speed.
@@ -89,7 +91,6 @@ zigset(rand());
 printf("\nLDAK - Software for obtaining Linkage Disequilibrium Adjusted Kinship estimates and Loads More\n");
 printf("Help pages at http://dougspeed.com/ldak\n\n");
 
-
 //declare variables
 #include "declare.c"
 
@@ -111,7 +112,6 @@ if(mode==2||mode==3||mode==5||mode==6||mode==8||mode==9||mode==10||mode==11||mod
 #include "checks3.c"
 }
 
-do adjust
 /////////
 
 //see if changing famfile (only allowed if not reading data)
@@ -143,6 +143,7 @@ printf("\n");
 #include "param.c"
 
 //set data_length to num_preds_use and keeppreds_use to keeppreds, then change when necessary
+//data_length always refers to main predictors (not regions)
 if(num_preds!=-1)
 {
 data_length=num_preds_use;
@@ -164,7 +165,7 @@ gstarts=malloc(sizeof(int)*num_genes);
 gends=malloc(sizeof(int)*num_genes);
 gpartitions=malloc(sizeof(int)*num_genes);
 
-gene_max=get_genes_boundaries(folder, partition, genenames, gchr, gstarts, gends, gpartitions, num_genes, num_preds_use);
+gmax=get_genes_boundaries(folder, partition, genenames, gchr, gstarts, gends, gpartitions, num_genes, num_preds_use);
 }
 
 if(num_regs>0&&(mode==9||mode==16||mode==24))	//will be using regions
@@ -210,39 +211,30 @@ data_length=get_partition_boundaries(folder, partition, keeppreds_use, keeppreds
 //if(mode==16)	//generalized reml - default fine
 //if(mode==17||mode==18)	//decompose kinships - default fine
 
-if(mode==19||mode==20)	//calc blups or scores, get predictor effects and work out which predictors we use
+if(mode==19||mode==20)	//calc blups or scores - get predictor effects
 {
-chr=malloc(sizeof(int)*num_preds_use);
-prednames=malloc(sizeof(char*)*num_preds_use);
-for(j=0;j<num_preds_use;j++){prednames[j]=malloc(sizeof(char)*100);}
-bp=malloc(sizeof(double)*num_preds_use);
-al1=malloc(sizeof(char)*num_preds_use);
-al2=malloc(sizeof(char)*num_preds_use);
-
-if(strcmp(chiamofile,"blank")!=0)
-{read_mapfile(mapfile, chr, prednames, bp, al1, al2, num_preds_use, keeppreds, 2);}
-if(strcmp(chiamofile,"blank")==0)
-{read_mapfile(mapfile, chr, prednames, bp, al1, al2, num_preds_use, keeppreds, 3);}
+allpreds=malloc(sizeof(char*)*num_preds_use);
+for(j=0;j<num_preds_use;j++){allpreds[j]=malloc(sizeof(char)*100);}
+alla1=malloc(sizeof(char)*num_preds_use);
+alla2=malloc(sizeof(char)*num_preds_use);
+read_mapfile(mapfile, NULL, allpreds, NULL, alla1, alla2, num_preds_use, keeppreds);
 
 allcentres=malloc(sizeof(float*)*(num_kins+num_regs));
 allfactors=malloc(sizeof(float*)*(num_kins+num_regs));
 wsums=malloc(sizeof(float)*num_kins);
 
-data_length=set_up_blup1(allcentres, allfactors, wsums, num_kins, kinstems, num_regs, regfile, num_preds_use, keeppreds, keeppreds_use, prednames, al1, al2, famfile, adjust);
+data_length=set_up_blup1(allcentres, allfactors, wsums, num_kins, kinstems, num_regs, regfile, allpreds, alla1, alla2, num_preds_use, keeppreds, keeppreds_use, famfile, adjust);
 
-//put factors into effects and set factors to 1
+//for regions, values in allfactors are effects
 effects=malloc(sizeof(double*)*(num_kins+num_regs+1));
 for(k=0;k<num_kins+num_regs+1;k++){effects[k]=malloc(sizeof(double)*data_length);}
 for(r=0;r<num_regs;r++)
 {
-for(j=0;j<data_length;j++)
-{effects[num_kins+r][j]=allfactors[num_kins+r][j];allfactors[num_kins+r][j]=1.0;
-}
+for(j=0;j<data_length;j++){effects[num_kins+r][j]=allfactors[num_kins+r][j];}
 }
 for(j=0;j<data_length;j++){effects[num_kins+num_regs][j]=0;}
-
-free(chr);free(bp);free(al1);free(al2);
-for(j=0;j<num_preds_use;j++){free(prednames[j]);}free(prednames);
+for(j=0;j<num_preds_use;j++){free(allpreds[j]);}free(allpreds);
+free(alla1);free(alla2);
 }	//end of prepare for blup
 
 ////////
@@ -254,10 +246,10 @@ if(mode==22)	//make snps ???
 
 //if(mode==23)	//add kins - default fine
 //if(mode==24&&num_regs==0)	//subtract kins - default fine
-if(mode==24&&num_regs>0)	//get (usable) number of predictors
+if(mode==24&&num_regs>0)	//get (max) number of predictors
 {
 sprintf(filename,"%s.grm.details",kinstems[0]);
-data_length=countrows(filename)-1;
+num_predsb=countrows(filename)-1;
 }
 
 //if(mode==25||mode==26||mode==27)	//converting data types - default fine
@@ -272,7 +264,7 @@ for(i=0;i<num_samples_use;i++){ids1[i]=malloc(sizeof(char)*100);ids2[i]=malloc(s
 read_famfile(famfile, ids1, ids2, num_samples_use, keepsamps);
 }
 
-if(num_preds!=-1)	//read in regular (or gene) predictor details
+if(num_preds!=-1)	//read in regular (or gene) predictor details (unnecessary for some modes)
 {
 chr=malloc(sizeof(int)*data_length);
 prednames=malloc(sizeof(char*)*data_length);
@@ -282,9 +274,9 @@ al1=malloc(sizeof(char)*data_length);
 al2=malloc(sizeof(char)*data_length);
 
 if(strcmp(chiamofile,"blank")!=0)
-{read_mapfile(mapfile, chr, prednames, bp, al1, al2, data_length, keeppreds_use, 0);}
+{read_mapfile(mapfile, chr, prednames, bp, NULL, NULL, data_length, keeppreds_use);}
 if(strcmp(chiamofile,"blank")==0)
-{read_mapfile(mapfile, chr, prednames, bp, al1, al2, data_length, keeppreds_use, 1);}
+{read_mapfile(mapfile, chr, prednames, bp, al1, al2, data_length, keeppreds_use);}
 }
 
 ///////////////////////////
@@ -300,8 +292,7 @@ for(j=0;j<data_length;j++){weights[j]=1;}
 else	//read weights from weightsfile
 {
 read_weightfile(weightsfile, weights, data_length, keeppreds_use, prednames, mapfile);
-if(mode==5){printf("First few weights (for Partition %d predictors) are:\n", partition);}
-else{printf("First few weights are:\n");}
+printf("First few weights are:\n");
 for(j=0;j<data_length;j++){if(j<5){printf("%f   ", weights[j]);}}
 printf("\n\n");
 }
@@ -339,6 +330,25 @@ for(i=0;i<num_samples_use;i++){covar[i]=1;}
 
 if(strcmp(covarfile,"blank")!=0)
 {read_covarfile(covarfile, covar+num_samples_use, ids1, ids2, num_samples_use, num_covars-1, missingvalue);}
+
+//fill Y and Z for response 1
+Ya=malloc(sizeof(double)*num_samples_use);
+Za=malloc(sizeof(double)*num_samples_use*num_covars);
+for(i=0;i<respindex[0][0];i++)
+{
+Ya[i]=resp[respindex[0][1+i]];
+for(j=0;j<num_covars;j++){Za[i+j*respindex[0][0]]=covar[respindex[0][1+i]+j*num_samples_use];}
+}
+if(mode==11)	//and for response 2
+{
+Yb=malloc(sizeof(double)*num_samples_use);
+Zb=malloc(sizeof(double)*num_samples_use*num_covars);
+for(i=0;i<respindex[1][0];i++)
+{
+Yb[i]=resp[respindex[1][1+i]];
+for(j=0;j<num_covars;j++){Zb[i+j*respindex[1][0]]=covar[respindex[1][1+i]+j*num_samples_use];}
+}
+}
 }	//end of reading resp and covar
 
 /////////
@@ -356,17 +366,15 @@ for(k=0;k<num_kins;k++)
 
 if(num_regs>0&&(mode==9||mode==16||mode==24))	//get region predictors and details
 {
-rchr=malloc(sizeof(int)*rdata_length);
 rprednames=malloc(sizeof(char*)*rdata_length);
 for(j=0;j<rdata_length;j++){rprednames[j]=malloc(sizeof(char)*100);}
-rbp=malloc(sizeof(double)*rdata_length);
 ral1=malloc(sizeof(char)*rdata_length);
 ral2=malloc(sizeof(char)*rdata_length);
 
 if(strcmp(chiamofile,"blank")!=0)
-{read_mapfile(mapfile, rchr, rprednames, rbp, ral1, ral2, rdata_length, rkeeppreds_use, 2);}
+{read_mapfile(mapfile, NULL, rprednames, NULL, NULL, NULL, rdata_length, rkeeppreds_use);}
 if(strcmp(chiamofile,"blank")==0)
-{read_mapfile(mapfile, rchr, rprednames, rbp, ral1, ral2, rdata_length, rkeeppreds_use, 3);}
+{read_mapfile(mapfile, NULL, rprednames, NULL, ral1, ral2, rdata_length, rkeeppreds_use);}
 
 rweights=malloc(sizeof(float)*rdata_length);
 
@@ -392,16 +400,22 @@ rkeepmults=malloc(sizeof(double)*rdata_length);
 (void) read_data_fly(bedfile, chiamofile, spfile, speedfile, datainput, 0, rdata, num_samples_use, keepsamps, 0, rdata_length, rkeeppreds_use, num_samples, num_preds, missingvalue, chiamoheaders, chiamoprobs, ral1, ral2, -1);
 if(strcmp(chiamofile,"blank")!=0||strcmp(spfile,"blank")!=0){fclose(datainput);}
 
-if(mode==9||mode==16){get_stats_qc(rkeepcentres, rkeepmults, rdata, num_samples_use, rdata_length, minmaf, maxmaf, minvar, minobs, missingvalue, power, rprednames, 2, rweights);}
-if(mode==24){get_stats_qc(rkeepcentres, rkeepmults, rdata, num_samples_use, rdata_length, minmaf, maxmaf, minvar, minobs, missingvalue, power, rprednames, 0, rweights);}
+//get stats but don't standardize
+(void)get_stats_qc(rkeepcentres, rkeepmults, rdata, num_samples_use, rdata_length, minmaf, maxmaf, minvar, minobs, missingvalue, power, rprednames, 0, rweights);
 
-if(mode==9||mode==16)	//will remove poor qc ones and perhaps prune based on correlation squared
+if(mode==9||mode==16)	//prune and update stats
 {prune_regions(num_regs, regindex, rdata, num_samples_use, rdata_length, prune, rkeepmults, rweights);}
+
+//now standardize
+(void)get_stats_qc(rkeepcentres, rkeepmults, rdata, num_samples_use, rdata_length, minmaf, maxmaf, minvar, minobs, missingvalue, power, rprednames, 3, rweights);
+
+//get an approx max
+rmax=0;for(r=0;r<num_regs;r++){rmax+=regindex[r][0];}
 }
 
 ///////////////////////////
 
-if(mode==9||mode==16)	//set shortcut
+if(mode==9||mode==16)	//set shortcut	??? think about this a bit more
 {
 count=0;
 for(r=0;r<num_regs;r++)
@@ -430,7 +444,7 @@ E=malloc(sizeof(double)*num_samples_use);
 read_eigenfile(eigenfile, U, E, num_samples_use, ids1, ids2);
 }
 
-if(mode==17||(shortcut==1&&num_kins==1&&strcmp(eigenfile,"blank")==0))	//perform decomposition
+if(mode==17||mode==18||(shortcut==1&&num_kins==1&&strcmp(eigenfile,"blank")==0))	//perform decomposition
 {
 printf("Performing eigen-decomposition\n");
 U=malloc(sizeof(double)*num_samples_use*num_samples_use);
@@ -453,12 +467,9 @@ printf("Eigen-decomposition complete\n\n");
 
 if(mode==19&&num_kins>0)	//do remainder of blup prep (which required ids)
 {
-mG=malloc(sizeof(double*)*(num_kins+num_regs));
-mG2=malloc(sizeof(double*)*(num_kins));
-for(k=0;k<num_kins;k++)
-{mG[k]=malloc(sizeof(double)*num_samples_use);mG2[k]=malloc(sizeof(double)*num_samples_use);}
-
-set_up_blup2(mG, mG2, blupfile, ids1, ids2, num_samples_use, num_kins, num_regs);
+mG2=malloc(sizeof(double*)*num_kins);
+for(k=0;k<num_kins;k++){mG2[k]=malloc(sizeof(double)*num_samples_use);}
+set_up_blup2(mG2, blupfile, ids1, ids2, num_samples_use, num_kins, num_regs);
 }
 
 ///////////////////////////
@@ -487,7 +498,7 @@ keepmults=malloc(sizeof(double)*data_length);
 (void) read_data_fly(bedfile, chiamofile, spfile, speedfile, datainput, 0, data, num_samples_use, keepsamps, 0, data_length, keeppreds_use, num_samples, num_preds, missingvalue, chiamoheaders, chiamoprobs, al1, al2, -1);
 if(strcmp(chiamofile,"blank")!=0||strcmp(spfile,"blank")!=0){fclose(datainput);}
 
-get_stats_qc(keepcentres, keepmults, data, num_samples_use, data_length, minmaf, maxmaf, minvar, minobs, missingvalue, power, prednames, 1, NULL);
+(void)get_stats_qc(keepcentres, keepmults, data, num_samples_use, data_length, minmaf, maxmaf, minvar, minobs, missingvalue, power, prednames, 1, NULL);
 
 //calc correlations
 
@@ -542,7 +553,7 @@ dgemm_("N", "T", &num_samples_use, &num_samples_use, &bitlength, &alpha, data, &
 if(weightsum==0)
 {printf("Error, no predictors remain in Partition %d\n\n", partition);exit(1);}
 
-//should save these
+//save kins
 sprintf(outfile, "%skinship%d", folder, partition);
 write_kins(outfile, kins, NULL, weightsum, ids1, ids2, num_samples_use, keeppreds_use, prednames, keepcentres, keepmults, weights, al1, al2, data_length, kinraw, kingz);
 
@@ -581,35 +592,98 @@ free(gchr);free(gbp1);free(gbp2);free(gstarts);free(gends);
 
 /////////
 
-if(mode==8||mode==9||mode==11)	//will be doing gene-based stuff
+if(mode==8)	//get gene-based kinships
 {
 //will read in data a gene at a time
-data=malloc(sizeof(double)*num_samples_use*gene_max);
+data=malloc(sizeof(double)*num_samples_use*gmax);
 if(strcmp(chiamofile,"blank")!=0||strcmp(spfile,"blank")!=0)
 {datainput=open_data_fly(chiamofile, spfile, num_samples, chiamoprobs, chiamoheaders);}
 
 keepcentres=malloc(sizeof(double)*data_length);
 keepmults=malloc(sizeof(double)*data_length);
 
-if(mode==8)
-{kins=malloc(sizeof(double)*num_samples_use*num_samples_use);}
+kins=malloc(sizeof(double)*num_samples_use*num_samples_use);
 
-if(mode==9||mode==11)	//allocate for first response
+//count out how many genes we will consider
+total=0;for(g=0;g<num_genes;g++){if(gpartitions[g]==partition){total++;}}
+
+current=0;prev1=0;prev2=0;count2=0;
+for(g=0;g<num_genes;g++)
 {
-Ya=malloc(sizeof(double)*num_samples_use);
-Za=malloc(sizeof(double)*num_samples_use*num_covars);
-ZTYa=malloc(sizeof(double)*num_covars);
-ZTZa=malloc(sizeof(double)*num_covars*num_covars);
-prepare_gene_reml(Ya, Za, &YTYa, ZTYa, ZTZa, &detZTZa, &YTCYa, resp, respindex[0], num_samples_use, covar, num_covars);
+if(gpartitions[g]==partition)
+{
+printf("Calculating kinships for Gene %d out of %d in Partition %d\n", count2+1, total, partition);
+
+glength=gends[g]-gstarts[g];
+count=0;weightsum=0;
+
+if(strcmp(chiamofile,"blank")!=0||strcmp(spfile,"blank")!=0)	//shuffle along data
+{
+for(j=gstarts[g];j<prev2;j++)
+{
+for(i=0;i<num_samples_use;i++)
+{data[i+count*num_samples_use]=data[i+(j-prev1)*num_samples_use];}
+weightsum+=weights[gstarts[g]+count];
+count++;
+}
 }
 
-if(mode==11)	//will have a second response
+current=read_data_fly(bedfile, chiamofile, spfile, speedfile, datainput, current, data+count*num_samples_use, num_samples_use, keepsamps, gstarts[g]+count, gends[g], keeppreds_use, num_samples, num_preds, missingvalue, chiamoheaders, chiamoprobs, al1, al2, -1);
+
+weightsum+=get_stats_qc(keepcentres+gstarts[g]+count, keepmults+gstarts[g]+count, data+count*num_samples_use, num_samples_use, gends[g]-gstarts[g]-count, minmaf, maxmaf, minvar, minobs, missingvalue, power, prednames, 2, weights+gstarts[g]+count);
+
+alpha=1.0;beta=0.0;
+dgemm_("N", "T", &num_samples_use, &num_samples_use, &glength, &alpha, data, &num_samples_use, data, &num_samples_use, &beta, kins, &num_samples_use);
+
+sprintf(outfile, "%sgeneship%d", folder, g+1);
+write_kins(outfile, kins, NULL, weightsum, ids1, ids2, num_samples_use, keeppreds_use+gstarts[g], prednames+gstarts[g], keepcentres+gstarts[g], keepmults+gstarts[g], weights+gstarts[g], al1+gstarts[g], al2+gstarts[g], glength, kinraw, kingz);
+
+prev1=gstarts[g];prev2=gends[g];count2++;
+}	//end of considering gene g
+}	//end of g loop
+
+if(strcmp(chiamofile,"blank")!=0||strcmp(spfile,"blank")!=0){fclose(datainput);}
+free(data);free(keepcentres);free(keepmults);free(kins);
+}	//end of mode=8
+
+/////////
+
+if(mode==9||mode==11)	//gene-based testing
 {
-Yb=malloc(sizeof(double)*num_samples_use);
-Zb=malloc(sizeof(double)*num_samples_use*num_covars);
+//will read in data a gene at a time
+data=malloc(sizeof(double)*num_samples_use*gmax);
+if(strcmp(chiamofile,"blank")!=0||strcmp(spfile,"blank")!=0)
+{datainput=open_data_fly(chiamofile, spfile, num_samples, chiamoprobs, chiamoheaders);}
+
+keepcentres=malloc(sizeof(double)*data_length);
+keepmults=malloc(sizeof(double)*data_length);
+
+Xstarts=malloc(sizeof(int)*(num_regs+1));Xends=malloc(sizeof(int)*(num_regs+1));
+Xrec=malloc(sizeof(int)*(rmax+gmax));Xrev=malloc(sizeof(int)*(rmax+gmax));
+Xsums=malloc(sizeof(double)*(num_regs+1));
+
+//prep for first response - might have regions
+Xa=malloc(sizeof(double)*respindex[0][0]*(rmax+gmax));
+if(num_regs+num_kins==0)
+{
+ZTYa=malloc(sizeof(double)*num_covars);
+ZTZa=malloc(sizeof(double)*num_covars*num_covars);
+prepare_gene_reml(Ya, Za, respindex[0][0], num_covars, &YTYa, ZTYa, ZTZa, &detZTZa, &YTCYa);
+}
+else
+{
+Mnull=malloc(sizeof(double)*respindex[0][0]*respindex[0][0]);
+fill_X(Xa, Xstarts, Xends, Xrec, Xrev, Xsums, respindex[0], num_samples_use, num_regs, rdata, regindex, rkeepmults, rweights, data, 0, NULL, NULL, &adjust2);
+multi_reml(Ya, Za, Xa, respindex[0][0], num_covars, num_regs, 0, Xstarts, Xends, Xrec, Xrev, Xsums, num_kins, mkins, shortcut, U, E, remla, NULL, NULL, NULL, rdata_length, rkeepcentres, rkeepmults, rweights, rprednames, ral1, ral2, NULL, NULL, NULL, 0, 0, 0, Mnull);
+likenull=remla[2];
+}
+
+if(mode==11)	//prep for second response (at moment will always have num_kins+num_regs=0)
+{
+Xb=malloc(sizeof(double)*respindex[1][0]*(rmax+gmax));
 ZTYb=malloc(sizeof(double)*num_covars);
 ZTZb=malloc(sizeof(double)*num_covars*num_covars);
-prepare_gene_reml(Yb, Zb, &YTYb, ZTYb, ZTZb, &detZTZb, &YTCYb, resp+num_samples_use, respindex[1], num_samples_use, covar, num_covars);
+prepare_gene_reml(Yb, Zb, respindex[1][0], num_covars, &YTYb, ZTYb, ZTZb, &detZTZb, &YTCYb);
 }
 
 //open results files
@@ -618,49 +692,52 @@ if(mode==9)
 sprintf(filename,"%sregress%d", folder, partition);
 if((output=fopen(filename,"w"))==NULL)
 {printf("Error writing to %s\n\n",filename);exit(1);}
-fprintf(output, "Gene_Number Gene_Name Phen_Number REML_Her REML_SD LRT_Stat LRT_P Score_Stat Score_P MA_Delta MA_SD REML_BF Gene_Length Gene_Weight\n");
+fprintf(output, "Gene_Number Gene_Name Phen_Number REML_Her REML_SD Likelihood LRT_Stat LRT_P Score_Stat Score_P MA_Delta MA_SD REML_BF Gene_Length Gene_Weight\n");
+
+sprintf(filename2,"%seffects%d", folder, partition);
+if((output2=fopen(filename2,"w"))==NULL)
+{printf("Error writing to %s\n\n", filename2);exit(1);}
+fprintf(output2, "Gene_Number Predictor Effect\n");
+fclose(output2);
 }
 if(mode==11)
 {
-sprintf(filename,"%sbivar%d", folder, partition);
-if((output=fopen(filename,"w"))==NULL)
-{printf("Error writing to %s\n\n", filename);exit(1);}
-fprintf(output, "Gene_Number Gene_Name Correlation Cor_SD REML_Her1 REML_Her2 LRT_Stat_0 LRT_P_0 Score_Stat_0 Score_Pva_0 Gene_Length Gene_Weight\n");
-
-sprintf(filename2,"%sregressA%d", folder, partition);
+sprintf(filename2,"%seffects%d", folder, partition);
 if((output2=fopen(filename2,"w"))==NULL)
 {printf("Error writing to %s\n\n", filename2);exit(1);}
-fprintf(output2, "Gene_Number Gene_Name Phen_Number REML_HerA REML_SDA LRT_StatA LRT_PA Score_StatA Score_PA MA_DeltaA MA_SDA REML_BFA Gene_Length Gene_Weight\n");
+fprintf(output2, "Gene_Number Predictor Effect\n");
 
-sprintf(filename3,"%sregressB%d", folder, partition);
-if((output3=fopen(filename3,"w"))==NULL)
+sprintf(filename,"%sregressA%d", folder, partition);
+if((output2=fopen(filename,"w"))==NULL)
+{printf("Error writing to %s\n\n", filename);exit(1);}
+fprintf(output, "Gene_Number Gene_Name Phen_Number REML_HerA REML_SDA LikelihoodA LRT_StatA LRT_PA Score_StatA Score_PA MA_DeltaA MA_SDA REML_BFA Gene_Length Gene_Weight\n");
+
+sprintf(filename2,"%sregressB%d", folder, partition);
+if((output3=fopen(filename2,"w"))==NULL)
+{printf("Error writing to %s\n\n", filename2);exit(1);}
+fprintf(output2, "Gene_Number Gene_Name Phen_Number REML_HerB REML_SDB LikelihoodB LRT_StatB LRT_P Score_StatB Score_PB MA_DeltaB MA_SDB REML_BFB Gene_Length Gene_Weight\n");
+
+sprintf(filename3,"%sbivar%d", folder, partition);
+if((output=fopen(filename3,"w"))==NULL)
 {printf("Error writing to %s\n\n", filename3);exit(1);}
-fprintf(output3, "Gene_Number Gene_Name Phen_Number REML_HerB REML_SDB LRT_StatB LRT_P Score_StatB Score_PB MA_DeltaB MA_SDB REML_BFB Gene_Length Gene_Weight\n");
+fprintf(output3, "Gene_Number Gene_Name Correlation Cor_SD REML_Her1 REML_Her2 LRT_Stat_0 LRT_P_0 Score_Stat_0 Score_Pva_0 Gene_Length Gene_Weight\n");
 }
 
-total=0;
-for(g=0;g<num_genes;g++)
-{
-if(gpartitions[g]==partition){total++;}
-}
+//count out how many genes we will consider
+total=0;for(g=0;g<num_genes;g++){if(gpartitions[g]==partition){total++;}}
+
 current=0;prev1=0;prev2=0;count2=0;
 for(g=0;g<num_genes;g++)
 {
 if(gpartitions[g]==partition)
 {
-count2++;
-if((g+1)%100==0)
+if(count2%100==0||(count2%10==0&&num_kins+num_regs>0))
 {
-printf("Considering Gene %d out of %d in Partition %d\n", count2, total, partition);
-if(mode==9)
-{
+printf("Testing Gene %d out of %d in Partition %d\n", count2, total, partition);
 fclose(output);
 if((output=fopen(filename,"a"))==NULL){printf("Error re-opening %s\n\n",filename);exit(1);}
-}
 if(mode==11)
 {
-fclose(output);
-if((output=fopen(filename,"a"))==NULL){printf("Error re-opening %s\n\n",filename);exit(1);}
 fclose(output2);
 if((output2=fopen(filename2,"a"))==NULL){printf("Error re-opening %s\n\n",filename2);exit(1);}
 fclose(output3);
@@ -668,7 +745,7 @@ if((output3=fopen(filename3,"a"))==NULL){printf("Error re-opening %s\n\n",filena
 }
 }
 
-length=gends[g]-gstarts[g];
+glength=gends[g]-gstarts[g];
 count=0;
 if(strcmp(chiamofile,"blank")!=0||strcmp(spfile,"blank")!=0)	//shuffle along data
 {
@@ -682,66 +759,55 @@ count++;
 
 current=read_data_fly(bedfile, chiamofile, spfile, speedfile, datainput, current, data+count*num_samples_use, num_samples_use, keepsamps, gstarts[g]+count, gends[g], keeppreds_use, num_samples, num_preds, missingvalue, chiamoheaders, chiamoprobs, al1, al2, -1);
 
-weightsum=get_stats_qc(keepcentres+gstarts[g]+count, keepmults+gstarts[g]+count, data+count*num_samples_use, num_samples_use, gends[g]-gstarts[g]-count, minmaf, maxmaf, minvar, minobs, missingvalue, power, prednames, 2, weights+gstarts[g]+count);
+get_stats_qc(keepcentres+gstarts[g]+count, keepmults+gstarts[g]+count, data+count*num_samples_use, num_samples_use, glength-count, minmaf, maxmaf, minvar, minobs, missingvalue, power, prednames, 2, weights+gstarts[g]+count);
 
-if(mode==8)	//calc kins and save
-{
-alpha=1.0;beta=0.0;
-dgemm_("N", "T", &num_samples_use, &num_samples_use, &length, &alpha, data, &num_samples_use, data, &num_samples_use, &beta, kins, &num_samples_use);
-sprintf(outfile, "%sgeneship%d", folder, g+1);
-write_kins(outfile, kins, NULL, weightsum, ids1, ids2, num_samples_use, keeppreds_use+gstarts[g], prednames+gstarts[g], keepcentres+gstarts[g], keepmults+gstarts[g], weights+gstarts[g], al1+gstarts[g], al2+gstarts[g], length, kinraw, kingz);
-}	//end of mode=8
+//calc gene-based reml for first response
+glength2=fill_X(Xa, Xstarts, Xends, Xrec, Xrev, Xsums, respindex[0], num_samples_use, num_regs, rdata, regindex, rkeepmults, rweights, data, glength, keepmults, weights, &adjust2);
 
-if(mode==9)	//calc gene-based reml for first response
-{
-if(num_kins+num_regs==0)	//simple case
-{
-gene_reml(remla, Ya, Za, YTYa, ZTYa, ZTZa, detZTZa, YTCYa, num_covars, data, respindex[0], num_samples_use, length, keepmults+gstarts[g], weights+gstarts[g], priora, priorb);
-}
+if(num_kins+num_regs==0)	//easy case
+{gene_reml(remla, Ya, Za, Xa, respindex[0][0], num_covars, glength2, Xsums[0], YTYa, ZTYa, ZTZa, detZTZa, YTCYa, priora, priorb);}
 else	//general case
+{multi_reml(Ya, Za, Xa, respindex[0][0], num_covars, num_regs, g+1, Xstarts, Xends, Xrec, Xrev, Xsums, num_kins, mkins, shortcut, U, E, remla, filename2, NULL, NULL, rdata_length, rkeepcentres, rkeepmults, rweights, rprednames, ral1, ral2, keepmults+gstarts[g], weights+gstarts[g], prednames+gstarts[g], adjust, adjust2, likenull, Mnull);}
+
+fprintf(output, "%d %s %d %.6f %.6f %.2f %.2f %.4e %.2f %.4e %.4f %.4f %.2f %d %.2f\n", g+1, genenames[g], keepresps[0]+1, remla[0], remla[1], remla[2], remla[3], remla[4], remla[5], remla[6], remla[7], remla[8], remla[9], glength, Xsums[num_regs]);
+
+if(mode==11)	//calc gene-based bivariate (currently must have num_kins+num_regs=0)
 {
+if(fill_X(Xb, NULL, NULL, NULL, NULL, NULL, respindex[1], num_samples_use, num_regs, rdata, regindex, rkeepmults, rweights, data, glength, keepmults, weights, &adjust2)!=glength2)
+{printf("Doug error 5\n");}
 
-}
+gene_reml(remlb, Yb, Zb, Xb, respindex[1][0], num_covars, glength2, Xsums[0], YTYb, ZTYb, ZTZb, detZTZb, YTCYb, priora, priorb);
 
-//print results
-fprintf(output, "%d %s %d %.6f %.6f %.2f %.4e %.2f %.4e %.4f %.4f %.2f %d %.2f\n", g+1, genenames[g], keepresps[0]+1, remla[2], remla[3], remla[4], remla[5], remla[6], remla[7], remla[8], remla[9], remla[10], (int)remla[0], remla[1]);
-}	//end of mode=9
-
-if(mode==11)	//calc gene-based bivariate
-{
-//start with individual remls
-gene_reml(remla, Ya, Za, YTYa, ZTYa, ZTZa, detZTZa, YTCYa, num_covars, data, respindex[0], num_samples_use, length, keepmults+gstarts[g], weights+gstarts[g], priora, priorb);
-gene_reml(remlb, Yb, Zb, YTYb, ZTYb, ZTZb, detZTZb, YTCYb, num_covars, data, respindex[0], num_samples_use, length, keepmults+gstarts[g], weights+gstarts[g], priora, priorb);
+fprintf(output2, "%d %s %d %.6f %.6f %.2f %.2f %.4e %.2f %.4e %.4f %.4f %.2f %d %.2f\n", g+1, genenames[g], keepresps[0]+1, remlb[0], remlb[1], remlb[2], remlb[3], remlb[4], remlb[5], remlb[6], remlb[7], remlb[8], remlb[9], glength, Xsums[num_regs]);
 
 //set bivar - gene sizes, rho, SDrho, herA, SDA, herB, SDB, LRTstat, LRTPval, scorestat, scorePval, eA, sigA, eB, sigB
-bivar[0]=remla[0];bivar[1]=remla[1];bivar[2]=0;bivar[3]=-1;
-bivar[4]=remla[2];bivar[5]=remla[3];bivar[6]=remlb[2];bivar[7]=remlb[3];
-bivar[8]=0;bivar[9]=1;bivar[10]=0;bivar[11]=1;
-bivar[12]=remla[11];bivar[13]=remla[11]*remla[2]/(1-remla[2]);
-bivar[14]=remlb[11];bivar[15]=remlb[11]*remlb[2]/(1-remlb[2]);
+bivar[0]=0;bivar[1]=-1;bivar[2]=remla[0];bivar[3]=remla[1];bivar[4]=remlb[0];bivar[5]=remlb[1];
+bivar[6]=0;bivar[7]=1;bivar[8]=0;bivar[9]=1;
+bivar[10]=remla[10];bivar[11]=remla[10]*remla[0]/(1-remla[0]);
+bivar[12]=remlb[10];bivar[13]=remlb[10]*remlb[0]/(1-remlb[0]);
 
-if(remla[2]>0.001&&remlb[2]>0.001)
+if(remla[0]>0.001&&remlb[0]>0.001)
 {
-gene_bivar(bivar, Ya, Yb, Za, Zb, ZTYa, ZTYb, ZTZa, ZTZb, detZTZa, detZTZb, YTCYa, YTCYb, num_covars, data, respindex, num_samples_use, length, keepmults+gstarts[g], weights+gstarts[g]);
+//gene_bivar(bivar, Ya, Yb, Za, Zb, ZTYa, ZTYb, ZTZa, ZTZb, detZTZa, detZTZb, YTCYa, YTCYb, num_covars, data, respindex, num_samples_use, gmax, keepmults+gstarts[g], weights+gstarts[g]);
 }
 
 //print results
-fprintf(output, "%d %s %.3f %.3f %.6f %.6f %.4f %.4e %.4f %.4e %d %.2f\n", g+1, genenames[g], bivar[2], bivar[3], bivar[4], bivar[6], bivar[8], bivar[9], bivar[10], bivar[11], (int)bivar[0], bivar[1]);
-fprintf(output2, "%d %s %d %.6f %.6f %.2f %.4e %.2f %.4e %.4f %.4f %.2f %d %.2f\n", g+1, genenames[g], 1, remla[2], remla[3], remla[4], remla[5], remla[6], remla[7], remla[8], remla[9], remla[10], (int)remla[0], remla[1]);
-fprintf(output3, "%d %s %d %.6f %.6f %.2f %.4e %.2f %.4e %.4f %.4f %.2f %d %.2f\n", g+1, genenames[g], 2, remlb[2], remlb[3], remlb[4], remlb[5], remlb[6], remlb[7], remlb[8], remlb[9], remlb[10], (int)remlb[0], remlb[1]);
+fprintf(output3, "%d %s %.3f %.3f %.6f %.6f %.4f %.4e %.4f %.4e %d %.2f\n", g+1, genenames[g], bivar[0], bivar[1], bivar[2], bivar[3], bivar[4], bivar[5], bivar[8], bivar[9], glength, Xsums[num_regs]);
 }	//end of mode=11
 
 prev1=gstarts[g];prev2=gends[g];
 }	//end of considering gene g
+count2++;
 }	//end of g loop
 
-if(mode==8){free(kins);}
-if(mode==9||mode==11){fclose(output);}
-if(mode==9||mode==11){free(Ya);free(Za);free(ZTYa);free(ZTZa);}
-if(mode==11){free(Yb);free(Zb);free(ZTYb);free(ZTZb);}
+fclose(output);if(mode==11){fclose(output2);fclose(output3);}
 
 if(strcmp(chiamofile,"blank")!=0||strcmp(spfile,"blank")!=0){fclose(datainput);}
 free(data);free(keepcentres);free(keepmults);
+
+free(Xstarts);free(Xends);free(Xrec);free(Xrev);free(Xsums);free(Xa);
+if(num_regs+num_kins==0){free(ZTYa);free(ZTZa);}else{free(Mnull);}
+if(mode==11){free(Xb);free(ZTYb);free(ZTZb);}
 }
 
 /////////
@@ -760,7 +826,16 @@ if(mode==12)
 
 if(mode==16)	//reml analysis
 {
-multi_reml(remla, resp, respindex[0], num_samples_use, covar, num_covars, num_kins, mkins, shortcut, U, E, num_regs, regindex, rdata, rdata_length, rkeepcentres, rkeepmults, rweights, rprednames, ral1, ral2, NULL, NULL, NULL, 0, NULL, 0, outfile, ids1, ids2);
+if(num_regs>0)
+{
+Xa=malloc(sizeof(double)*respindex[0][0]*rmax);
+Xstarts=malloc(sizeof(int)*num_regs);Xends=malloc(sizeof(int)*num_regs);
+Xrec=malloc(sizeof(int)*rmax);Xrev=malloc(sizeof(int)*rmax);
+Xsums=malloc(sizeof(double)*num_regs);
+fill_X(Xa, Xstarts, Xends, Xrec, Xrev, Xsums, respindex[0], num_samples_use, num_regs, rdata, regindex, rkeepmults, rweights, data, 0, NULL, NULL, &adjust);
+}
+
+multi_reml(Ya, Za, Xa, respindex[0][0], num_covars, num_regs, -1, Xstarts, Xends, Xrec, Xrev, Xsums, num_kins, mkins, shortcut, U, E, NULL, outfile, ids1, ids2, rdata_length, rkeepcentres, rkeepmults, rweights, rprednames, ral1, ral2, NULL, NULL, NULL, adjust, adjust2, 0, NULL);
 }
 
 if(mode==17)	//decomp kinship and save
@@ -812,26 +887,22 @@ for(j=0;j<bitlength;j++)
 for(i=0;i<num_samples_use;i++)
 {
 if(data[i+j*num_samples_use]!=missingvalue)
-{data2[i+j*num_samples_use]=(data[i+j*num_samples_use]-allcentres[k][bitstart+j])*allfactors[k][bitstart+j];}
+{data2[i+j*num_samples_use]=data[i+j*num_samples_use]-allcentres[k][bitstart+j];}
 else
 {data2[i+j*num_samples_use]=0;}
 }
 }
 
-if(k<num_kins)	//for kins, get standardised effects
+if(k<num_kins)	//for kins, get raw effects (must multiply by allfactors twice)
 {
 alpha=1.0/wsums[k];beta=0.0;
 dgemv_("T", &num_samples_use, &bitlength, &alpha, data2, &num_samples_use, mG2[k], &one, &beta, effects[k]+bitstart, &one);
+for(j=bitstart;j<bitend;j++){effects[k][j]=effects[k][j]*pow(allfactors[k][j],2);}
 }
 
 //now predictions for all
 alpha=1.0;beta=1.0;
 dgemv_("N", &num_samples_use, &bitlength, &alpha, data2, &num_samples_use, effects[k]+bitstart, &one, &beta, preds[k], &one);
-
-if(k<num_kins)	//for kins, transform into raw effects
-{
-for(j=bitstart;j<bitend;j++){effects[k][j]=effects[k][j]*allfactors[k][j];}
-}
 }	//end of k loop
 }	//end of bit loop
 
@@ -867,17 +938,17 @@ if(mode==24&&num_regs>0)
 kins=malloc(sizeof(double)*num_samples_use*num_samples_use);
 read_kinfile(kinstems[0], kins, NULL, num_samples_use, ids1, ids2, 0);
 
-ptemp=malloc(sizeof(char*)*data_length);
-for(j=0;j<data_length;j++){ptemp[j]=malloc(sizeof(char)*100);}
-wtemp=malloc(sizeof(float)*data_length);
-a1temp=malloc(sizeof(char)*data_length);
-a2temp=malloc(sizeof(char)*data_length);
+allpreds=malloc(sizeof(char*)*num_predsb);
+for(j=0;j<num_predsb;j++){allpreds[j]=malloc(sizeof(char)*100);}
+alla1=malloc(sizeof(char)*num_predsb);
+alla2=malloc(sizeof(char)*num_predsb);
 
-keepcentres=malloc(sizeof(double)*data_length);
-keepmults=malloc(sizeof(double)*data_length);
-order=malloc(sizeof(int)*data_length);
+keepcentres=malloc(sizeof(double)*num_predsb);
+keepmults=malloc(sizeof(double)*num_predsb);
+weights=malloc(sizeof(float)*num_predsb);
+keeppredsb=malloc(sizeof(int)*num_predsb);
 
-weightsum=adjust_details(kinstems[0], ptemp, keepcentres, keepmults, wtemp, a1temp, a2temp, order, rdata_length, rprednames, rkeepcentres, rkeepmults, rweights, ral1, ral2);
+weightsum=adjust_details(kinstems[0], allpreds, keepcentres, keepmults, weights, alla1, alla2, keeppredsb, rdata_length, rprednames, rkeepcentres, rkeepmults, rweights, ral1, ral2);
 
 value=weightsum;
 for(j=0;j<rdata_length;j++)
@@ -900,11 +971,13 @@ for(i=0;i<num_samples_use;i++){rdata[i+j*num_samples_use]=0;}
 alpha=-1.0/value;beta=weightsum/value;
 dgemm_("N", "T", &num_samples_use, &num_samples_use, &rdata_length, &alpha, rdata, &num_samples_use, rdata, &num_samples_use, &beta, kins, &num_samples_use);
 
-write_kins(outfile, kins, NULL, value, ids1, ids2, num_samples_use, order, ptemp, keepcentres, keepmults, wtemp, a1temp, a2temp, data_length, kinraw, kingz);
+write_kins(outfile, kins, NULL, value, ids1, ids2, num_samples_use, keeppredsb, allpreds, keepcentres, keepmults, weights, alla1, alla2, num_predsb, kinraw, kingz);
 
-free(kins);free(wtemp);free(a1temp);free(a2temp);free(keepcentres);free(keepmults);free(order);
-for(j=0;j<data_length;j++){free(ptemp[j]);}free(ptemp);
+free(kins);free(alla1);free(alla2);free(keepcentres);free(keepmults);free(weights);free(keeppredsb);
+for(j=0;j<num_predsb;j++){free(allpreds[j]);}free(allpreds);
 }
+
+/////////
 
 if(mode==25||mode==26||mode==27)	//converting data
 {
@@ -949,6 +1022,7 @@ free(gpartitions);
 if(mode==9||mode==11||mode==16||(mode==17&&num_resps>0))
 {
 free(resp);free(covar);
+free(Ya);free(Za);if(mode==11){free(Yb);free(Zb);}
 for(m=0;m<num_resps_use;m++){free(respindex[m]);}free(respindex);
 }
 
@@ -963,12 +1037,10 @@ if(num_regs>0&&(mode==9||mode==16||mode==24))
 {
 free(rkeeppreds_use);
 for(r=0;r<num_regs;r++){free(regindex[r]);}free(regindex);
-free(rchr);free(rbp);free(ral1);free(ral2);
 for(j=0;j<rdata_length;j++){free(rprednames[j]);}free(rprednames);
+free(ral1);free(ral2);
 free(rdata);
-free(rkeepmults);
-free(rkeepcentres);
-free(rweights);
+free(rkeepmults);free(rkeepcentres);free(rweights);
 }
 
 if(mode==19||mode==20)

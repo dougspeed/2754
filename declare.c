@@ -33,9 +33,7 @@ char chiamosuffix[500]="gen";
 double missingvalue=-99;
 float power=-1;
 
-//char kpredfile2[500]="blank", kpredfile[500]="";
 char bpredfile2[500]="blank", bpredfile[500]="";
-//char ksampfile2[500]="blank", ksampfile[500]="";
 char bsampfile2[500]="blank", bsampfile[500]="";
 
 int num_subs=-1;
@@ -102,7 +100,7 @@ int kindetails=1;
 int samedata=1;
 
 float priora=-1.0, priorb=-1.0;	//default is -1 and 1
-float adjust=0.0;
+float adjust=0.0, adjust2;
 
 float cut1=-1, cut2=-1;
 int scoretest=0;
@@ -111,13 +109,16 @@ float prune=0.995;
 
 ///////////////////////////
 
-//program variables
+//temporary program variables
 
 int i, i2, j, j2, k, g, m, r, count, count2;
-int found, found2, found3, current, prev1, prev2, length, lwork, info, one=1, total;
-int readint, *order, shortcut=0, gen, gen2;
+int bit, bittotal, bitstart, bitend, bitlength, bitsize=5000;
+
+int found, found2, found3, current, prev1, prev2, lwork, info, one=1, total;
+int readint, *order, gen, gen2, shortcut;
+
 float value;
-double alpha, beta, wkopt, *work;
+double alpha, beta, wkopt, *work, likenull;
 
 char readstring[100], readstring2[100], readstring3[100];
 
@@ -129,48 +130,46 @@ FILE *input, *datainput, *output, *output2, *output3;
 int evalue, evalue2;	//these are used for checking folder exists
 struct stat statstruct;
 
+/////////
+
+//permanent program variables
 
 int num_samples=-1, num_samples_use=-1;
-int num_preds=-1, num_preds_use=-1, num_preds_useb;
+int num_preds=-1, num_preds_use=-1, num_predsb, num_preds_useb;
 
-char **allsnps, **usesnps;
-char **allsamps, **usesamps;
-
-int *keeppreds, *keeppreds_use, *keeppredsb, *rkeeppreds_use;
 int *keepsamps;
+int *keeppreds, *keeppreds_use, *keeppredsb, *rkeeppreds_use;
 
-char **ids1, **ids2;
+char **ids1, **ids2, **allsamps, **usesamps;
 
-int *chr, *rchr;
-char **prednames, **rprednames, **ptemp, *al1, *al2, *a1temp, *a2temp, *ral1, *ral2;
-double *bp, *rbp;
+char **prednames, **rprednames, **allpreds, **usepreds;
+int *chr;
+double *bp;
+char *al1, *al2, *ral1, *ral2, *alla1, *alla2;
 
-float *weights, *rweights, *wtemp, weightsum;
-
-int data_length, rdata_length;
+int data_length, rdata_length, **regindex, rmax;
 double *data, *rdata, *data2;
+
 double *keepcentres, *keepmults, *rkeepcentres, *rkeepmults;
+float *weights, *rweights, weightsum;
 
-double *kins, *divs, **mkins, *U, *E;
+double *kins, **mkins, *U, *E;
 
-int bit, bittotal, bitstart, bitend, bitlength, bitsize=5000;
-
-int num_genes, num_genes_approx, gene_max=0;
+int num_genes, num_genes_approx, gmax, glength, glength2;
+char **genenames;
 int *gchr, *gstarts, *gends, *gpartitions;
 double *gbp1, *gbp2;
-char **genenames;
 
 int num_resps, num_resps_use, keepresps[2], **respindex;
 double *resp, *resptemp;
 
-int **regindex;
-
 int num_covars=1;
 double *covar;
 
-double *Ya, *Za, *ZTYa, *ZTZa, YTYa, detZTZa, YTCYa, remla[12];
-double *Yb, *Zb, *ZTYb, *ZTZb, YTYb, detZTZb, YTCYb, remlb[12];
-double bivar[11];
+double *Ya, *Za, *ZTYa, *ZTZa, YTYa, detZTZa, YTCYa, *Xa, remla[11];
+double *Yb, *Zb, *ZTYb, *ZTZb, YTYb, detZTZb, YTCYb, *Xb, remlb[11];
+int *Xstarts, *Xends, *Xrec, *Xrev;
+double *Xsums, *Mnull, bivar[14];
 
 double **mG, **mG2, **effects, **preds;
 float **allcentres, **allfactors, *wsums;

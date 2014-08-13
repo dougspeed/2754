@@ -10,6 +10,3 @@ Copyright 2014 Doug Speed.
 */
 
 
-
-
-

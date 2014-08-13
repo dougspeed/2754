@@ -261,8 +261,8 @@ if(countrows(filename)<1)
 if(num_regs!=0&&strcmp(regpref,"blank")==0)
 {printf("If using the argument \"--region-number\", you must also use \"--region-prefix\"\n\n");exit(1);}
 
-if(num_regs==0&&strcmp(regpref,"blank")!=0)
-{printf("If using the argument \"--region-prefix\", you must also use \"--region-number\"\n\n");exit(1);}
+//if(num_regs==0&&strcmp(regpref,"blank")!=0)
+//{printf("If using the argument \"--region-prefix\", you must also use \"--region-number\"\n\n");exit(1);}
 
 if(num_regs>0)
 {

@@ -56,7 +56,7 @@ return(0);
 
 double get_stats_qc(double *centres, double *mults, double *data, int num_samples_use, int length, float minmaf, float maxmaf, float minvar, float minobs, float missingvalue, float power, char **prednames, int type, float *weights)
 {
-//type=1 means standardize, type=2 means standardize with weights
+//type=0, just get stats, type=1 means standardize, type=2 means standardize with weights, type=3, standardize with weights using orig stats
 int i, j, indcount;
 int misscount, misscount2, misscount3;
 double sum, sumsq, mean, var, wsum;
@@ -66,6 +66,8 @@ mindata=0;
 misscount=0;misscount2=0;misscount3=0;
 wsum=0;
 for(j=0;j<length;j++)
+{
+if(type==0||type==1||type==2)	//will get stats
 {
 sum=0;sumsq=0;indcount=0;mean=0;var=0;maf=0;
 for(i=0;i<num_samples_use;i++)
@@ -115,7 +117,10 @@ mults[j]=-1;
 }
 
 //will set missing to mean so update stats
-var=sumsq/num_samples_use-pow(mean,2)*indcount/num_samples_use;
+if(mults[j]!=-1)
+{var=sumsq/num_samples_use-pow(mean,2)*indcount/num_samples_use;
+mults[j]=pow(var,power/2);}
+}	//end of getting stats
 
 if(type==1)	//standardise
 {
@@ -135,7 +140,7 @@ for(i=0;i<num_samples_use;i++){data[i+j*num_samples_use]=0;}
 }
 }
 
-if(type==2)	//standardise and weight
+if(type==2||type==3)	//standardise and weight
 {
 if(mults[j]!=-1&&weights[j]>0)
 {
@@ -245,7 +250,7 @@ for(r=0;r<num_regs;r++)
 for(j=0;j<regindex[r][0];j++){usedpreds[regindex[r][1+j]]++;}
 }
 
-if(prune<=1){printf("Pruning SNPs based on a correlation squared of %f\nTo avoid this, set \"--prune\" to a value greater than 1\n\n", prune);}
+if(prune<=1){printf("Pruning SNPs based on a correlation squared of %f\nTo avoid this, set \"--prune\" to a value greater than 1\n", prune);}
 
 count=0;count3=0;
 for(r=0;r<num_regs;r++)	//loop through regions
@@ -303,4 +308,51 @@ free(usedpreds);
 
 return(0);
 }	//end of prune_regions
+
+///////////////////////////
+
+int fill_X(double *X, int *Xstarts, int *Xends, int *Xrec, int *Xrev, double *Xsums, int *kindex, int num_samples_use, int num_regs, double *rdata, int **regindex, double *rmults, float *rweights, double *gdata, int glength, double *gmults, float *gweights, float *adjust2)
+{
+int i,j, j2, r, count;
+int ns, wnum;
+
+ns=kindex[0];
+*adjust2=0;
+
+wnum=0;*adjust2=0;count=0;
+for(r=0;r<num_regs;r++)
+{
+if(Xstarts!=NULL){Xstarts[r]=wnum;Xsums[r]=0;}
+for(j=0;j<regindex[r][0];j++)
+{
+j2=regindex[r][1+j];
+if(rmults[j2]!=-1&&rweights[j2]>0)
+{
+for(i=0;i<ns;i++){X[i+wnum*ns]=rdata[kindex[1+i]+j2*ns];}
+if(Xstarts!=NULL)
+{Xrec[wnum]=r;Xrev[wnum]=j2;Xsums[r]+=rweights[j2];}
+*adjust2+=rweights[j2];
+wnum++;
+}}
+if(Xstarts!=NULL){Xends[r]=wnum;}
+}
+if(glength>0)
+{
+if(Xstarts!=NULL){Xstarts[num_regs]=wnum;Xsums[num_regs]=0;}
+for(j=0;j<glength;j++)
+{
+if(gmults[j]!=-1&&gweights[j]>0)
+{
+for(i=0;i<ns;i++){X[i+wnum*ns]=gdata[kindex[1+i]+j*ns];}
+if(Xstarts!=NULL)
+{Xrec[wnum]=num_regs;Xrev[wnum]=j;Xsums[num_regs]+=gweights[j];}
+*adjust2+=gweights[j];
+wnum++;count++;
+}}
+if(Xstarts!=NULL){Xends[num_regs]=wnum;}
+}
+
+return(count);
+}	//end of fill_X
+
 

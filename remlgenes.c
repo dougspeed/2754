@@ -9,30 +9,20 @@ Copyright 2014 Doug Speed.
 
 */
 
-int prepare_gene_reml(double *Y, double *Z, double *YTY, double *ZTY, double *ZTZ, double *detZTZ, double *YTCY, double *resp, int *kindex, int num_samples_use, double *covar, int num_covars)
+int prepare_gene_reml(double *Y, double *Z, int ns, int num_covars, double *YTY, double *ZTY, double *ZTZ, double *detZTZ, double *YTCY )
 {
 int i, j, k;
-int ns, one=1, info;
+int one=1, info;
 double alpha, beta;
 
-ns=kindex[0];
-
-//fill Y
-for(i=0;i<ns;i++){Y[i]=resp[kindex[1+i]];}
 
 //calc YTY
 *YTY=0;for(i=0;i<ns;i++){*YTY+=pow(Y[i],2);}
 
-//fill Z
-for(i=0;i<ns;i++)
-{
-for(j=0;j<num_covars;j++){Z[i+j*ns]=covar[kindex[1+i]+j*num_samples_use];}
-}
-
 //calc ZTY, ZTZ, detZTZ, invZTZ (stored in ZTZ)
 alpha=1.0;beta=0.0;
 dgemv_("T", &ns, &num_covars, &alpha, Z, &ns, Y, &one, &beta, ZTY, &one);
-dgemm_("T", "N", &num_covars, &num_covars, &ns, &alpha, covar, &ns, covar, &ns, &beta, ZTZ, &num_covars);
+dgemm_("T", "N", &num_covars, &num_covars, &ns, &alpha, Z, &ns, Z, &ns, &beta, ZTZ, &num_covars);
 
 dpotrf_("U", &num_covars, ZTZ, &num_covars, &info);
 if(info!=0)
@@ -57,45 +47,27 @@ for(k=0;k<num_covars;k++){*YTCY-=ZTY[j]*ZTZ[j+k*num_covars]*ZTY[k];}
 return(0);
 }	//end of prepare_gene_reml
 
-
 ///////////////////////////
 
-int gene_reml(double *reml, double *Y, double *Z, double YTY, double *ZTY, double *ZTZ, double detZTZ, double YTCY, int num_covars, double *data, int *kindex, int num_samples_use, int length, double *mults, float *weights, float priora, float priorb)
+int gene_reml(double *reml, double *Y, double *Z, double *X, int ns, int num_covars, int wnum, float wsum, double YTY, double *ZTY, double *ZTZ, double detZTZ, double YTCY, float priora, float priorb)
 {
-int i, j, k, count;
-int ns, nfree, one=1, info, lwork, best, stop;
+int j, k, count;
+int nfree, one=1, info, lwork, best, stop;
 double alpha, beta, wkopt, *work;
 
-int wnum;
-double wsum, lbetaab, S1, S2, S3, T1, T2, T3;
+double lbetaab, S1, S2, S3, T1, T2, T3;
 double gam, like, like2, like3, maxlike, likenull, deriv, dderiv, d2, dd2;
 double lambda, lamdiff, her, hernew, sd, sdlog;
 double statlrt, pvalrt, statscore, pvascore, remlbf;
-double *X, *XTY, *XTZ, *XTCX, *XTCXtemp, *E, *U, *D, *Dtemp1, *Dtemp2;
+double *XTY, *XTZ, *XTCX, *XTCXtemp, *E, *U, *D, *Dtemp1, *Dtemp2;
 
 
-ns=kindex[0];
 nfree=ns-num_covars;
 likenull=-.5*nfree*(1+log(2*M_PI*YTCY/nfree))-.5*detZTZ;
 
-//allocations
-X=malloc(sizeof(double)*ns*length);
-
-//fill X
-wnum=0;wsum=0;
-for(j=0;j<length;j++)
-{
-if(mults[j]!=-1&&weights[j]>0)
-{
-for(i=0;i<ns;i++){X[i+wnum*ns]=data[kindex[1+i]+j*num_samples_use];}
-wnum++;wsum+=weights[j];
-}	//end of use this predictor
-}
-
-//fill reml assuming gene not tested
-reml[0]=(double)wnum;reml[1]=wsum;reml[2]=0;reml[3]=0;
-reml[4]=0;reml[5]=1;reml[6]=0;reml[7]=1;
-reml[8]=log(1.0/99999);reml[9]=0;reml[10]=-10;reml[11]=YTCY/nfree;
+//fill reml assuming gene does not contribute
+reml[0]=0;reml[1]=0;reml[2]=likenull;reml[3]=0;reml[4]=1;reml[5]=0;reml[6]=1;
+reml[7]=log(1.0/99999);reml[8]=0;reml[9]=-10;	//reml[10]=YTCY/nfree;
 
 if(wsum>0)
 {
@@ -191,7 +163,7 @@ like=-.5*nfree*(1+log(2*M_PI*gam/nfree))-.5*S1+.5*wnum*log(lambda)-.5*detZTZ;
 like+=priora*log(wsum)+(priorb-1)*log(lambda)-(priora+priorb)*log(wsum+lambda)-lbetaab;
 
 //always want to break before updating
-if(stop==1){break;}
+if(abs(like-like2)<0.0001&&abs(like2-like3)<0.0001){break;}
 if(count==1000){printf("Gene did not finish after %d REML iterations, I hope it got close\n", count);break;}
 
 lamdiff=deriv/dderiv;
@@ -204,7 +176,6 @@ if(hernew-her>0.1){hernew=her+.1;lambda=wsum*(1-hernew)/hernew;}
 if(her-hernew>0.1){hernew=her-.1;lambda=wsum*(1-hernew)/hernew;}
 her=hernew;
 
-if(abs(like-like2)<0.0001&&abs(like2-like3)<0.0001){stop=1;}
 count++;
 }
 
@@ -244,14 +215,11 @@ if(dd2>0){pvascore=1.0;}
 dd2=pow(lambda,2)*dderiv;
 sdlog=pow(-dd2,-.5);
 
-reml[0]=(double)wnum;reml[1]=wsum;reml[2]=her;reml[3]=sd;
-reml[4]=statlrt;reml[5]=pvalrt/2;reml[6]=statscore;reml[7]=pvascore;
-if(her>0){reml[8]=log(wsum)-log(lambda);reml[9]=sdlog;reml[10]=remlbf;reml[11]=gam/nfree;}
+reml[0]=her;reml[1]=sd;reml[2]=like;reml[3]=statlrt;reml[4]=pvalrt/2;reml[5]=statscore;reml[6]=pvascore;
+if(her>0){reml[7]=log(wsum)-log(lambda);reml[8]=sdlog;reml[9]=remlbf;reml[10]=gam/nfree;}
 
 free(XTY);free(XTZ);free(XTCX);free(XTCXtemp);free(E);free(U);free(D);
 }	//end of if wnum>0
-
-free(X);
 
 return(0);
 }	//end of gene_reml

@@ -10,7 +10,7 @@ Copyright 2014 Doug Speed.
 */
 
 
-int set_up_blup1(float **allcentres, float **allfactors, float *wsums, int num_kins, char **kinstems, int num_regs, char *regfile, int num_preds_use, int *keeppreds, int *keeppreds_use, char **prednames, char *al1, char *al2, char *famfile, float adjust)
+int set_up_blup1(float **allcentres, float **allfactors, float *wsums, int num_kins, char **kinstems, int num_regs, char *regfile, char **prednames, char *al1, char *al2, int num_preds_use, int *keeppreds, int *keeppreds_use, char *famfile, float adjust)
 {
 int j, j2, j3, k, r, count, count2, flag;
 int *kindex, *kindexb, *usedpreds;
@@ -205,14 +205,14 @@ return(count);
 
 ///////////////////////////
 
-int set_up_blup2(double **mG, double **mG2, char *blupfile, char **ids1, char **ids2, int num_samples_use, int num_kins, int num_regs)
+int set_up_blup2(double **mG2, char *blupfile, char **ids1, char **ids2, int num_samples_use, int num_kins, int num_regs)
 {
 int i, k, r, count;
 int found, *kindex;
 
 char **ids1b, **ids2b;
 
-float readfloat, *gtemp, *gtemp2;
+float readfloat, *gtemp;
 
 FILE *input;
 
@@ -223,7 +223,6 @@ for(i=0;i<count;i++)
 {ids1b[i]=malloc(sizeof(char)*500);ids2b[i]=malloc(sizeof(char)*500);}
 
 gtemp=malloc(sizeof(float)*count*num_kins);
-gtemp2=malloc(sizeof(float)*count*num_kins);
 
 kindex=malloc(sizeof(int)*count);
 
@@ -237,7 +236,7 @@ if(fscanf(input, "%s %s ", ids1b[i], ids2b[i])!=2)
 
 for(k=0;k<num_kins;k++)
 {
-if(fscanf(input, "%f %f ", gtemp2+i+k*count, gtemp+i+k*count)!=2)
+if(fscanf(input, "%f %f ", gtemp+i+k*count, &readfloat)!=2)
 {printf("Error reading random effects %d for Individual %s %s in %s\n\n", k+1, ids1b[i], ids2b[i], blupfile);exit(1);}
 }
 for(r=0;r<num_regs;r++)	//skip to end of row
@@ -254,20 +253,14 @@ if(found>0){printf("Error, Ind %s %s is in %s but not in data\n\n", ids1[found-1
 if(found<0){printf("Error, Ind %s %s features in data more than once\n\n", ids1[-found-1], ids2[-found-1]);exit(1);}
 
 //fill up, starting by setting all to zero
-for(i=0;i<num_samples_use;i++)
-{
-for(k=0;k<num_kins;k++){mG[k][i]=0;mG2[k][i]=0;}
-}
-
-for(i=0;i<count;i++)
-{
 for(k=0;k<num_kins;k++)
-{mG[k][kindex[i]]=gtemp[i+k*count];
-mG2[k][kindex[i]]=gtemp2[i+k*count];}
+{
+for(i=0;i<num_samples_use;i++){mG2[k][i]=0;}
+for(i=0;i<count;i++){mG2[k][kindex[i]]=gtemp[i+k*count];}
 }
 
 for(i=0;i<count;i++){free(ids1b[i]);free(ids2b[i]);}free(ids1b);free(ids2b);
-free(gtemp);free(gtemp2);free(kindex);
+free(gtemp);free(kindex);
 
 return(0);
 }	//end of set_up_blup2
